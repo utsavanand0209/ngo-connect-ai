@@ -2,17 +2,42 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 export default function Navbar() {
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const handleAuthChange = () => {
-      setIsAuthenticated(!!localStorage.getItem('token'));
+    const checkAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setIsAuthenticated(false);
+        return;
+      }
+      try {
+        // Use /api/auth/me to check if token is valid
+        const res = await fetch('http://localhost:5001/api/auth/me', {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          setIsAuthenticated(true);
+        } else {
+          localStorage.removeItem('token');
+          setIsAuthenticated(false);
+        }
+      } catch {
+        setIsAuthenticated(false);
+      }
     };
 
-    window.addEventListener('authChange', handleAuthChange);
+    checkAuth();
 
+    const handleAuthChange = () => {
+      checkAuth();
+    };
+    window.addEventListener('authChange', handleAuthChange);
+    window.addEventListener('storage', handleAuthChange);
     return () => {
       window.removeEventListener('authChange', handleAuthChange);
+      window.removeEventListener('storage', handleAuthChange);
     };
   }, []);
 

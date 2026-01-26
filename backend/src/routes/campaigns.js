@@ -1,8 +1,19 @@
+
 const express = require('express');
 const router = express.Router();
 const Campaign = require('../models/Campaign');
 const auth = require('../middleware/auth');
 const AILog = require('../models/AILog');
+
+// Get all campaigns where the user is a volunteer
+router.get('/my/volunteered', auth(['user', 'ngo', 'admin']), async (req, res) => {
+  try {
+    const campaigns = await Campaign.find({ volunteers: req.user.id });
+    res.json(campaigns);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // Create campaign (ngo only) - auto-classify category via AI route
 router.post('/', auth(['ngo']), async (req, res) => {

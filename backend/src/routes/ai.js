@@ -53,10 +53,58 @@ router.post('/chat', async (req, res) => {
   try {
     const { message } = req.body;
     const m = (message || '').toLowerCase();
-    let reply = "I'm NGO Connect bot. Ask me how to use the platform, about NGO registration, or request recommendations.";
-    if (m.includes('register')) reply = 'To register, go to Register page and pick User or NGO. NGOs must upload verification docs.';
-    else if (m.includes('recommend')) reply = 'I can recommend NGOs. Provide your interests and location or ask for suggestions.';
-    else if (m.includes('ngo')) reply = 'NGOs can create profiles, post campaigns, and upload docs for verification.';
+    let reply = "I'm NGO Connect bot. Ask me about NGOs, social work, registration, recommendations, or platform features.";
+
+    // FAQ and smart answers
+    if (m.includes('register')) {
+      reply = 'To register, go to the Register page and choose User or NGO. NGOs must upload verification documents for admin approval.';
+    } else if (m.includes('recommend')) {
+      reply = 'I can recommend NGOs based on your interests and location. Try: "Recommend NGOs for education in Bangalore".';
+    } else if (m.includes('ngo') && m.includes('verify')) {
+      reply = 'NGOs are verified by admins after reviewing their documents. Only verified NGOs can post campaigns.';
+    } else if (m.includes('how many ngos')) {
+      const ngoCount = await NGO.countDocuments({});
+      reply = `There are currently ${ngoCount} NGOs registered on the platform.`;
+    } else if (m.match(/top|best|popular/) && m.includes('ngo')) {
+      const ngos = await NGO.find({ verified: true }).sort({ createdAt: -1 }).limit(3);
+      reply = 'Here are some NGOs you might like: ' + ngos.map(n => n.name).join(', ') + '.';
+    } else if (m.includes('campaign')) {
+      reply = 'Campaigns are fundraising or volunteering opportunities posted by NGOs. You can view and support them from the Campaigns page.';
+    } else if (m.includes('donate')) {
+      reply = 'To donate, go to the Campaigns page, select a campaign, and click Donate. You can pay securely online.';
+    } else if (m.includes('volunteer')) {
+      reply = 'To volunteer, browse volunteering campaigns or contact NGOs directly from their profile pages.';
+    } else if (m.includes('impact')) {
+      const ngo = await NGO.findOne({ verified: true }).sort({ createdAt: -1 });
+      if (ngo && ngo.impactMetrics && ngo.impactMetrics.length > 0) {
+        reply = `Example impact: ${ngo.name} - ${ngo.impactMetrics.slice(0,3).join('; ')}.`;
+      } else {
+        reply = 'Many NGOs share their impact metrics on their profile pages.';
+      }
+    } else if (m.includes('contact')) {
+      reply = 'You can contact NGOs via their profile pages using the provided contact links or social media.';
+    } else if (m.includes('about you') || m.includes('who are you')) {
+      reply = "I'm an AI-powered assistant for NGO Connect. I can answer questions about NGOs, social work, and platform features.";
+    } else if (m.includes('list ngos in')) {
+      // e.g. "list ngos in bangalore"
+      const city = m.split('list ngos in')[1]?.trim().split(' ')[0];
+      if (city) {
+        const ngos = await NGO.find({ location: new RegExp(city, 'i'), verified: true }).limit(5);
+        if (ngos.length > 0) {
+          reply = `NGOs in ${city}: ` + ngos.map(n => n.name).join(', ') + '.';
+        } else {
+          reply = `No NGOs found in ${city}.`;
+        }
+      } else {
+        reply = 'Please specify a city, e.g., "List NGOs in Bangalore".';
+      }
+    } else if (m.includes('sector') || m.includes('cause area')) {
+      const sectors = await NGO.distinct('primarySectors');
+      reply = 'Some cause areas on the platform: ' + sectors.filter(Boolean).slice(0, 8).join(', ') + '.';
+    } else if (m.includes('help') || m.includes('feature')) {
+      reply = 'You can ask me about NGO registration, verification, donations, volunteering, campaigns, impact, or how to use the platform.';
+    }
+
     await AILog.create({ type: 'chat', payload: { message }, result: { reply } });
     res.json({ reply });
   } catch (err) {

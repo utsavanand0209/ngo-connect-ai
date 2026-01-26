@@ -7,7 +7,43 @@ export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState('');
   const [stats, setStats] = useState({ ngos: 0, campaigns: 0, donations: 0 });
+  const [myDonationTotal, setMyDonationTotal] = useState(0);
+  const [myVolunteerCount, setMyVolunteerCount] = useState(0);
+  const [donationDetails, setDonationDetails] = useState([]);
+  const [volunteerDetails, setVolunteerDetails] = useState([]);
+  const [showDonations, setShowDonations] = useState(false);
+  const [showVolunteered, setShowVolunteered] = useState(false);
+  const [ngoCount, setNgoCount] = useState(0);
+  const [campaignCount, setCampaignCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [campaigns, setCampaigns] = useState([]);
+  const [donationCampaignId, setDonationCampaignId] = useState('');
+  const [donationAmount, setDonationAmount] = useState('');
+  const [donationLoading, setDonationLoading] = useState(false);
+  const [donationMessage, setDonationMessage] = useState('');
+
+  // Helper to fetch donation and volunteer stats
+  const fetchStats = () => {
+    api.get('/donations/my')
+      .then(res => {
+        setDonationDetails(res.data);
+        const total = res.data.reduce((sum, d) => sum + (d.amount || 0), 0);
+        setMyDonationTotal(total);
+      })
+      .catch((err) => {
+        setMyDonationTotal(0);
+        setDonationDetails([]);
+      });
+    api.get('/campaigns/my/volunteered')
+      .then(res => {
+        setVolunteerDetails(res.data);
+        setMyVolunteerCount(res.data.length);
+      })
+      .catch((err) => {
+        setMyVolunteerCount(0);
+        setVolunteerDetails([]);
+      });
+  };
 
   useEffect(() => {
     // Decode JWT to get user info
@@ -21,7 +57,22 @@ export default function Dashboard() {
         console.error('Failed to decode token');
       }
     }
-    setLoading(false);
+    // Fetch campaigns for donation
+    api.get('/campaigns')
+      .then(res => {
+        setCampaigns(res.data);
+        setCampaignCount(res.data.length);
+      })
+      .catch(() => {
+        setCampaigns([]);
+        setCampaignCount(0);
+      })
+      .finally(() => setLoading(false));
+    // Fetch verified NGOs
+    api.get('/ngos')
+      .then(res => setNgoCount(res.data.length))
+      .catch(() => setNgoCount(0));
+    fetchStats();
   }, []);
 
   if (loading) return <div className="p-6 text-center">Loading...</div>;
@@ -157,26 +208,68 @@ export default function Dashboard() {
         <p className="text-gray-600 mb-8">Your personal dashboard to discover and support NGOs</p>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6 text-center hover:shadow-lg transition">
+          <div className="bg-white rounded-lg shadow p-6 text-center hover:shadow-lg transition cursor-pointer" onClick={() => navigate('/ngos')}>
             <p className="text-4xl">🔍</p>
             <h3 className="text-gray-600 mt-2">Verified NGOs</h3>
-            <p className="text-3xl font-bold text-blue-600 mt-2">50+</p>
+            <p className="text-3xl font-bold text-blue-600 mt-2">{ngoCount}</p>
           </div>
-          <div className="bg-white rounded-lg shadow p-6 text-center hover:shadow-lg transition">
+          <div className="bg-white rounded-lg shadow p-6 text-center hover:shadow-lg transition cursor-pointer" onClick={() => navigate('/campaigns')}>
             <p className="text-4xl">📢</p>
             <h3 className="text-gray-600 mt-2">Active Campaigns</h3>
-            <p className="text-3xl font-bold text-green-600 mt-2">120+</p>
+            <p className="text-3xl font-bold text-green-600 mt-2">{campaignCount}</p>
           </div>
-          <div className="bg-white rounded-lg shadow p-6 text-center hover:shadow-lg transition">
+          <div className="bg-white rounded-lg shadow p-6 text-center hover:shadow-lg transition cursor-pointer" onClick={() => setShowDonations(true)}>
             <p className="text-4xl">💰</p>
             <h3 className="text-gray-600 mt-2">Donated</h3>
-            <p className="text-3xl font-bold text-purple-600 mt-2">$0</p>
+            <p className="text-3xl font-bold text-purple-600 mt-2">₹{myDonationTotal}</p>
           </div>
-          <div className="bg-white rounded-lg shadow p-6 text-center hover:shadow-lg transition">
+          <div className="bg-white rounded-lg shadow p-6 text-center hover:shadow-lg transition cursor-pointer" onClick={() => setShowVolunteered(true)}>
             <p className="text-4xl">🤝</p>
             <h3 className="text-gray-600 mt-2">Volunteered</h3>
-            <p className="text-3xl font-bold text-orange-600 mt-2">0</p>
+            <p className="text-3xl font-bold text-orange-600 mt-2">{myVolunteerCount}</p>
           </div>
+              {/* Donation Details Modal */}
+              {showDonations && (
+                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+                  <div className="bg-white rounded-lg shadow-lg p-8 max-w-lg w-full relative">
+                    <button className="absolute top-2 right-4 text-2xl" onClick={() => setShowDonations(false)}>&times;</button>
+                    <h2 className="text-xl font-bold mb-4">Your Donations</h2>
+                    {donationDetails.length === 0 ? (
+                      <p className="text-gray-600">No donations found.</p>
+                    ) : (
+                      <ul className="divide-y">
+                        {donationDetails.map((d, i) => (
+                          <li key={d._id || i} className="py-2 flex justify-between items-center">
+                            <span>Campaign: {d.campaign ? d.campaign : d.campaignId || 'N/A'}</span>
+                            <span className="font-semibold">₹{d.amount}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* Volunteered Campaigns Modal */}
+              {showVolunteered && (
+                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+                  <div className="bg-white rounded-lg shadow-lg p-8 max-w-lg w-full relative">
+                    <button className="absolute top-2 right-4 text-2xl" onClick={() => setShowVolunteered(false)}>&times;</button>
+                    <h2 className="text-xl font-bold mb-4">Your Volunteered Campaigns</h2>
+                    {volunteerDetails.length === 0 ? (
+                      <p className="text-gray-600">No volunteered campaigns found.</p>
+                    ) : (
+                      <ul className="divide-y">
+                        {volunteerDetails.map((c, i) => (
+                          <li key={c._id || i} className="py-2">
+                            <span className="font-semibold">{c.title || 'Campaign'}</span>
+                            <span className="block text-sm text-gray-500">{c.description}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
@@ -201,17 +294,115 @@ export default function Dashboard() {
           <div className="bg-white rounded-lg shadow-lg p-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-6">💡 Get Started</h2>
             <div className="space-y-3">
-              <div className="p-4 bg-gradient-to-r from-yellow-50 to-yellow-100 border-l-4 border-yellow-600 rounded">
+              <Link to="/profile" className="block p-4 bg-gradient-to-r from-yellow-50 to-yellow-100 border-l-4 border-yellow-600 rounded hover:shadow transition">
                 <h3 className="font-semibold text-yellow-600">📋 Complete Your Profile</h3>
                 <p className="text-sm text-gray-600 mt-2">Add your interests and skills to get better NGO recommendations</p>
+              </Link>
+              <div className="block p-4 bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-600 rounded hover:shadow transition">
+                <h3 className="font-semibold text-red-600">💳 Make Your Donation</h3>
+                {campaigns.length === 0 ? (
+                  <p className="text-sm text-gray-600 mt-2">There is nothing inside to donate.</p>
+                ) : (
+                  <form
+                    onSubmit={async e => {
+                      e.preventDefault();
+                      setDonationLoading(true);
+                      setDonationMessage('');
+                      try {
+                        await api.post(`/donations/campaign/${donationCampaignId}`, {
+                          amount: donationAmount
+                        });
+                        setDonationMessage('Donation successful!');
+                        setDonationAmount('');
+                        setDonationCampaignId('');
+                        setTimeout(() => setDonationMessage(''), 2000);
+                        await fetchStats();
+                    } catch (err) {
+                      setDonationMessage('Donation failed.');
+                      console.error('Donation error:', err);
+                    }
+                    setDonationLoading(false);
+                    }}
+                    className="space-y-2 mt-2"
+                  >
+                    <label className="block text-sm font-medium text-gray-700">Select Campaign</label>
+                    <select
+                      value={donationCampaignId}
+                      onChange={e => setDonationCampaignId(e.target.value)}
+                      className="block w-full border-gray-300 rounded-md"
+                      required
+                    >
+                      <option value="" disabled>Select a campaign</option>
+                      {campaigns.map(c => (
+                        <option key={c._id} value={c._id}>{c.title}</option>
+                      ))}
+                    </select>
+                    <label className="block text-sm font-medium text-gray-700">Amount</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={donationAmount}
+                      onChange={e => setDonationAmount(e.target.value)}
+                      className="block w-full border-gray-300 rounded-md"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                      disabled={donationLoading}
+                    >
+                      {donationLoading ? 'Donating...' : 'Donate'}
+                    </button>
+                    {donationMessage && <p className="text-sm mt-2">{donationMessage}</p>}
+                  </form>
+                )}
               </div>
-              <div className="p-4 bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-600 rounded">
-                <h3 className="font-semibold text-red-600">💳 Make Your First Donation</h3>
-                <p className="text-sm text-gray-600 mt-2">Support a cause you care about today</p>
-              </div>
-              <div className="p-4 bg-gradient-to-r from-teal-50 to-teal-100 border-l-4 border-teal-600 rounded">
+              <div className="block p-4 bg-gradient-to-r from-teal-50 to-teal-100 border-l-4 border-teal-600 rounded hover:shadow transition">
                 <h3 className="font-semibold text-teal-600">🤝 Volunteer for a Campaign</h3>
-                <p className="text-sm text-gray-600 mt-2">Connect your skills to make a real impact</p>
+                {campaigns.length === 0 ? (
+                  <p className="text-sm text-gray-600 mt-2">There is nothing inside to volunteer.</p>
+                ) : (
+                  <form
+                    onSubmit={async e => {
+                      e.preventDefault();
+                      setDonationLoading(true);
+                      setDonationMessage('');
+                      try {
+                        await api.post(`/campaigns/${donationCampaignId}/volunteer`);
+                        setDonationMessage('Successfully volunteered!');
+                        setDonationCampaignId('');
+                        setTimeout(() => setDonationMessage(''), 2000);
+                        await fetchStats();
+                      } catch (err) {
+                        setDonationMessage('Failed to volunteer.');
+                        console.error('Volunteer error:', err);
+                      }
+                      setDonationLoading(false);
+                    }}
+                    className="space-y-2 mt-2"
+                  >
+                    <label className="block text-sm font-medium text-gray-700">Select Campaign</label>
+                    <select
+                      value={donationCampaignId}
+                      onChange={e => setDonationCampaignId(e.target.value)}
+                      className="block w-full border-gray-300 rounded-md"
+                      required
+                    >
+                      <option value="" disabled>Select a campaign</option>
+                      {campaigns.map(c => (
+                        <option key={c._id} value={c._id}>{c.title}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="submit"
+                      className="mt-2 px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700"
+                      disabled={donationLoading}
+                    >
+                      {donationLoading ? 'Submitting...' : 'Volunteer'}
+                    </button>
+                    {donationMessage && <p className="text-sm mt-2">{donationMessage}</p>}
+                  </form>
+                )}
               </div>
             </div>
           </div>

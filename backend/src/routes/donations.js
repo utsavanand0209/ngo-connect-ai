@@ -1,8 +1,19 @@
+
 const express = require('express');
 const router = express.Router();
 const Donation = require('../models/Donation');
 const Campaign = require('../models/Campaign');
 const auth = require('../middleware/auth');
+
+// Get all donations for the logged-in user
+router.get('/my', auth(['user', 'ngo', 'admin']), async (req, res) => {
+  try {
+    const donations = await Donation.find({ user: req.user.id });
+    res.json(donations);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // Dummy donation
 router.post('/campaign/:id', auth(['user']), async (req, res) => {

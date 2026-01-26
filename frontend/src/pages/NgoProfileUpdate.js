@@ -18,8 +18,8 @@ export default function NgoProfileUpdate() {
     // Fetch current NGO data if logged in
     const fetchNgo = async () => {
       try {
-        // This would fetch the logged-in NGO's profile
-        // For now, we'll use the form for new entries
+        const res = await api.get('/ngos/me');
+        setNgo(res.data);
       } catch (err) {
         console.log('No profile found, ready to create');
       }

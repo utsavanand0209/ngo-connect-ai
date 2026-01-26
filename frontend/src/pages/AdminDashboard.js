@@ -21,8 +21,20 @@ export default function AdminDashboard() {
           <div key={n._id} className="p-4 bg-white rounded shadow">
             <h2 className="font-bold">{n.name}</h2>
             <p>{n.email}</p>
-            <button onClick={()=>verify(n._id)} className="px-3 py-1 bg-green-600 text-white rounded mr-2">Verify</button>
-            <button onClick={()=>reject(n._id)} className="px-3 py-1 bg-red-600 text-white rounded">Reject</button>
+            {n.about && <p className="mt-1 text-gray-800"><strong>About:</strong> {n.about}</p>}
+            {n.achievements && n.achievements.length > 0 && (
+              <div className="mt-1">
+                <strong>Achievements:</strong>
+                <ul className="list-disc ml-6 text-xs">
+                  {n.achievements.map((ach, i) => <li key={i}>{ach}</li>)}
+                </ul>
+              </div>
+            )}
+            {n.contactLink && (
+              <p className="mt-1"><strong>Contact:</strong> <a href={n.contactLink} className="text-blue-600 underline" target="_blank" rel="noopener noreferrer">{n.contactLink}</a></p>
+            )}
+            <button onClick={()=>verify(n._id)} className="px-3 py-1 bg-green-600 text-white rounded mr-2 mt-2">Verify</button>
+            <button onClick={()=>reject(n._id)} className="px-3 py-1 bg-red-600 text-white rounded mt-2">Reject</button>
           </div>
         ))}
       </div>

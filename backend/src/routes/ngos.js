@@ -32,6 +32,17 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// NGO get their own profile
+router.get('/me', auth(['ngo']), async (req, res) => {
+  try {
+    const ngo = await NGO.findById(req.user.id);
+    if (!ngo) return res.status(404).json({ message: 'NGO not found' });
+    res.json(ngo);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // NGO updates (only ngo role)
 router.put('/me', auth(['ngo']), async (req, res) => {
   try {

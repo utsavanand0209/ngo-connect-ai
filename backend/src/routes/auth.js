@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const NGO = require('../models/NGO');
+const auth = require('../middleware/auth');
 
 // Register (users and NGOs)
 router.post('/register', async (req, res) => {
@@ -55,6 +56,31 @@ router.post('/login', async (req, res) => {
     if (!valid) return res.status(400).json({ message: 'Invalid credentials' });
     const token = jwt.sign({ id: account._id, role: account.role || role, email: account.email }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
     res.json({ token });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.get('/me', auth('user'), async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.put('/me', auth('user'), async (req, res) => {
+  try {
+    const { name, email, interests, skills } = req.body;
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { name, email, interests, skills },
+      { new: true }
+    ).select('-password');
+    res.json(user);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
