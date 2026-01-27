@@ -102,17 +102,16 @@ export default function NgoList() {
                     </p>
                     <Link to={`/ngos/${ngo._id}`} className="block mt-2">
                       <p className="text-xl font-semibold text-gray-900">{ngo.name}</p>
-                      <p className="mt-3 text-base text-gray-500">{ngo.description.substring(0, 100)}...</p>
+                      {ngo.description && <p className="mt-3 text-base text-gray-500">{ngo.description.substring(0, 100)}...</p>}
                       {ngo.about && <p className="mt-2 text-gray-700 text-sm">{ngo.about.substring(0, 80)}...</p>}
                       {ngo.achievements && ngo.achievements.length > 0 && (
                         <ul className="mt-2 text-xs text-green-700 list-disc ml-4">
                           {ngo.achievements.slice(0,2).map((ach, i) => <li key={i}>{ach}</li>)}
                         </ul>
-                      )}
+                      )}</Link>
                       {ngo.contactLink && (
                         <a href={ngo.contactLink} className="text-blue-600 underline text-xs" target="_blank" rel="noopener noreferrer">Contact</a>
                       )}
-                    </Link>
                   </div>
                   <div className="mt-6 flex items-center">
                     <div className="flex-shrink-0">
