@@ -33,7 +33,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // NGO get their own profile
-router.get('/me', auth(['ngo', 'admin', 'user']), async (req, res) => {
+router.get('/me', auth(['ngo']), async (req, res) => {
   try {
     const ngo = await NGO.findById(req.user.id);
     if (!ngo) return res.status(404).json({ message: 'NGO not found', ngo: null });
@@ -44,7 +44,7 @@ router.get('/me', auth(['ngo', 'admin', 'user']), async (req, res) => {
 });
 
 // NGO updates (only ngo role)
-router.put('/me', auth(['ngo', 'admin', 'user']), async (req, res) => {
+router.put('/me', auth(['ngo']), async (req, res) => {
   try {
     const ngo = await NGO.findByIdAndUpdate(req.user.id, req.body, { new: true });
     res.json(ngo);
@@ -54,7 +54,7 @@ router.put('/me', auth(['ngo', 'admin', 'user']), async (req, res) => {
 });
 
 // Upload verification docs
-router.post('/me/verify', auth(['ngo', 'admin', 'user']), upload.array('docs', 5), async (req, res) => {
+router.post('/me/verify', auth(['ngo']), upload.array('docs', 5), async (req, res) => {
   try {
     const paths = req.files.map(f => f.path);
     const ngo = await NGO.findByIdAndUpdate(req.user.id, { $push: { verificationDocs: { $each: paths } } }, { new: true });
