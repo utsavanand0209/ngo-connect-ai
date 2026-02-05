@@ -1,135 +1,71 @@
-## Screenshots
-
-> Place your screenshots in the `screenshots/` folder. Example filenames: `dashboard.png`, `ngo-profile.png`, `campaign-list.png`, `chatbot.png`.
-
-### Example Screenshots
-
-| Dashboard | NGO Profile | Campaign List | Chatbot |
-|-----------|-------------|--------------|---------|
-| ![Dashboard](screenshots/dashboard.png) | ![NGO Profile](screenshots/ngo-profile.png) | ![Campaign List](screenshots/campaign-list.png) | ![Chatbot](screenshots/chatbot.png) |
-
----
-
-## Usage Examples
-
-### 1. Register as a User or NGO
-Go to `/register`, fill in your details, and select your role. NGOs must upload verification documents for admin approval.
-
-### 2. Browse and Search NGOs
-Visit `/ngos` to discover verified NGOs. Use the search and filter options to find organizations by name, category, or location.
-
-### 3. View NGO Profiles
-Click on any NGO to see a detailed profile, including programs, people, impact, and financials with interactive graphs.
-
-### 4. Donate or Volunteer
-On a campaign page, click "Donate" to contribute or "Volunteer" to sign up. Track your contributions in your dashboard.
-
-### 5. Use the AI Chatbot
-Open the Chatbot page to ask questions about the platform, get NGO recommendations, or learn how to use features.
-
-### 6. Admin Actions
-Admins can verify NGOs, manage users, and review registrations from the Admin Dashboard.
-
----
 # NGO-Connect
 
+NGO-Connect is a full-stack AI-enabled platform designed to bridge the gap between NGOs, donors, and volunteers. It provides a comprehensive suite of tools for NGOs to showcase their work, manage campaigns, and engage with their supporters. For users, it offers a centralized platform to discover, donate to, and volunteer for causes they care about. The platform is enhanced with AI features to provide a smarter, more intuitive experience.
 
-NGO-Connect is a full-stack AI-enabled platform connecting NGOs, donors, and volunteers. It features rich demo data, interactive dashboards, and smart tools for discovery, engagement, and impact tracking. NGOs can create detailed profiles, launch campaigns, and showcase their work, while users can discover, donate, volunteer, and interact via messaging and an AI chatbot.
+## Features
 
-
-## Features (2026 Demo)
-
-- **Rich NGO Profiles:** Detailed, visually rich profiles with programs, people, impact metrics, financials (with graphs), badges, and more.
-- **Campaign Management:** NGOs can create, update, and manage fundraising and volunteering campaigns. Users can browse, search, and filter campaigns by category and location.
-- **Donation & Volunteering:** Secure donation system and volunteer sign-up for campaigns. Users can track their contributions and volunteering history.
-- **AI Chatbot:** Smart assistant powered by Google's Gemini 2.5 Flash model. It answers questions, recommends NGOs, and helps users navigate the platform using a `v1beta` API endpoint.
-- **Personalized Dashboards:** Separate dashboards for users, NGOs, and admins, showing stats, recent activity, and quick actions.
-- **Admin Tools:** Admin dashboard for verifying NGOs, managing users, and reviewing registrations.
-- **Messaging:** In-app messaging between users and NGOs for direct communication.
-- **Search & Discovery:** AI-powered recommendations, search, and filters for NGOs and campaigns.
-- **Impact Tracking:** Interactive graphs (Recharts) for NGO financials and impact metrics.
-- **Profile Management:** Users and NGOs can update their profiles, including uploading documents and editing details.
-- **Fraud Detection (Demo):** AI endpoint for scoring potential fraud risk in NGO/campaign data.
-- **Volunteer Matching (Demo):** AI endpoint for matching volunteers to campaigns based on skills and location.
-- **Fully Populated Demo Data:** Backend seeded with highly detailed, realistic NGO and campaign data for presentation/demo.
-
+- **Rich NGO Profiles:** NGOs can create detailed profiles with their mission, programs, leadership, financial transparency, and impact metrics.
+- **Campaign Management:** NGOs can create and manage fundraising and volunteering campaigns.
+- **Donations & Volunteering:** Users can easily donate to campaigns or sign up as volunteers.
+- **AI Chatbot:** A smart assistant powered by Google's Gemini 2.5 Flash model to help users navigate the platform and find information.
+- **Personalized Dashboards:** Separate dashboards for users, NGOs, and admins to manage their activities.
+- **Admin Tools:** A dedicated admin dashboard for verifying NGOs, managing users, and overseeing platform activity.
+- **Messaging:** Direct messaging functionality for communication between users and NGOs.
+- **Search & Discovery:** Advanced search and filtering options to discover NGOs and campaigns.
+- **Impact Tracking:** Interactive graphs to visualize financial data and impact metrics.
+- **Profile Management:** Users and NGOs can easily update their profiles and manage their information.
+- **AI-Powered Recommendations:** The platform uses AI to recommend NGOs and campaigns to users based on their interests and location.
+- **Fraud Detection:** An AI-powered feature to score and flag potentially fraudulent NGOs or campaigns.
+- **Volunteer Matching:** An AI-driven tool to match volunteers with suitable campaigns based on their skills and availability.
 
 ## Tech Stack
 
-**Frontend:**
-- React 18 (SPA)
-- React Router v6
-- Axios (API calls)
-- Tailwind CSS (UI)
-- Heroicons (icons)
-- Recharts (interactive graphs)
+### Frontend
+- **React 18:** For building the user interface.
+- **React Router v6:** For client-side routing.
+- **Axios:** For making API requests.
+- **Tailwind CSS:** For styling the application.
+- **Heroicons:** For icons.
+- **Recharts:** For creating interactive charts.
 
-**Backend:**
-- Node.js + Express.js
-- MongoDB + Mongoose
-- JWT (auth)
-- Bcryptjs (passwords)
-- Multer (uploads)
-- CORS, Dotenv
-- @google/generative-ai
+### Backend
+- **Node.js & Express.js:** For the server-side application.
+- **MongoDB & Mongoose:** As the database and ODM.
+- **JWT (JSON Web Tokens):** For authentication.
+- **Bcryptjs:** For password hashing.
+- **Multer:** For handling file uploads.
+- **CORS:** For enabling Cross-Origin Resource Sharing.
+- **Dotenv:** For managing environment variables.
+- **@google/generative-ai:** For integrating with Google's Generative AI models.
 
-**AI/Smart Features:**
-- AI Chatbot powered by Google Gemini 2.5 Flash
-- Rule-based AI endpoints (recommendation, classification, chatbot, fraud scoring, volunteer matching)
+### AI/Smart Features
+- **Google Gemini 2.5 Flash:** Powers the AI chatbot.
+- **Rule-based AI Endpoints:** For recommendations, classification, fraud scoring, and volunteer matching.
 
-**Other:**
-- Admin dashboard, messaging, RESTful API, rich seed data
+## Getting Started
 
+Follow these instructions to get a copy of the project up and running on your local machine for development and testing purposes.
 
-## Current Progress (Feb 2026)
+### Prerequisites
 
-- All major modules implemented: authentication, NGO/user/admin dashboards, campaign management, donations, messaging, AI chatbot, search, and profile management.
-- Chatbot functionality updated to use the latest Gemini 2.5 Flash model via the `v1beta` API.
-- Fully demo-ready: visually rich, interactive, and populated with realistic data for all sections.
-- GitHub repo cleaned and pushed.
-- Tech stack and codebase up to date with modern best practices.
+- **Node.js and npm:** Make sure you have Node.js and npm installed. You can download them from [nodejs.org](https://nodejs.org/).
+- **MongoDB:** You need a running instance of MongoDB. You can use a local installation or a cloud service like MongoDB Atlas.
 
----
-
-## Implementation Highlights
-
-### AI Chatbot with Gemini 2.5 Flash
-
-The chatbot is a key feature of NGO-Connect. It uses the `@google/generative-ai` library to connect to Google's Gemini models.
-
--   **Model:** The chatbot uses the `gemini-2.5-flash` model, a powerful and recent model from Google.
--   **API Version:** The connection is made using the `v1beta` API version, which is necessary to access the latest models. This is specified in the `getGenerativeModel` call in `backend/src/routes/ai.js`.
-
-```javascript
-// backend/src/routes/ai.js
-const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash"
-}, { apiVersion: 'v1beta' });
-```
-
-This ensures the chatbot can leverage the latest AI capabilities for providing helpful responses to users.
-
-
-## Installation
-
-To get started with NGO-Connect on a new machine, follow these steps:
+### Installation & Setup
 
 1.  **Clone the repository:**
-
     ```bash
-    git clone https://github.com/utsavanand0209/ngo-connect-ai.git
-    cd ngo-connect-ai
+    git clone https://github.com/your-username/Ngo-Connect.git
+    cd Ngo-Connect
     ```
 
 2.  **Install backend dependencies:**
-
     ```bash
     cd backend
     npm install
     ```
 
 3.  **Install frontend dependencies:**
-
     ```bash
     cd ../frontend
     npm install
@@ -137,36 +73,100 @@ To get started with NGO-Connect on a new machine, follow these steps:
 
 4.  **Set up environment variables:**
 
-    *   In the `backend` directory, create a `.env` file. This file stores sensitive information and should not be committed to version control. Add the following variables:
+    *   In the `backend` directory, create a `.env` file and add the following variables. Replace the placeholder values with your actual data.
 
-        ```
+        ```env
         PORT=5001
-        MONGO_URI=<your_mongodb_uri> # Your MongoDB connection string
-        JWT_SECRET=<your_jwt_secret> # A secret key for signing JSON Web Tokens
-        GEMINI_API_KEY=<your_gemini_api_key> # Your API key from Google AI Studio
+        MONGO_URI=<your_mongodb_uri>
+        JWT_SECRET=<your_jwt_secret>
+        GEMINI_API_KEY=<your_gemini_api_key>
         ```
 
     *   In the `frontend` directory, create a `.env` file and add the following variable:
-        ```
+        ```env
         REACT_APP_API_URL=http://localhost:5001/api
         ```
 
-6.  **Run the application:**
+### Database Seeding
 
-    *   **Start the backend server:**
+To populate the database with sample data, run the following command in the `backend` directory:
 
-        ```bash
-        cd backend
-        npm start
-        ```
+```bash
+node seed.js
+```
 
-    *   **Start the frontend development server:**
-        ```bash
-        cd frontend
-        npm start
-        ```
-The application will be available at `http://localhost:3000`.
+This will create a set of users, NGOs, and campaigns, including an admin user.
 
+### Running the Application
+
+1.  **Start the backend server:**
+    ```bash
+    cd backend
+    npm start
+    ```
+    The backend server will start on `http://localhost:5001`.
+
+2.  **Start the frontend development server:**
+    ```bash
+    cd frontend
+    npm start
+    ```
+    The frontend application will be available at `http://localhost:3000`.
+
+### Test Credentials
+
+After seeding the database, you can use the following credentials to test the application:
+
+-   **Admin:** `admin@ngoconnect.org` / `password123`
+-   **User:** `rahul@example.com` / `password123`
+-   **NGO:** `eduforall@ngo.org` / `password123`
+
+## API Endpoints
+
+The backend provides a RESTful API with the following main endpoints:
+
+-   `/api/auth`: Authentication (register, login)
+-   `/api/users`: User management
+-   `/api/ngos`: NGO profiles and management
+-   `/api/campaigns`: Campaign management
+-   `/api/donations`: Donation handling
+-   `/api/messages`: Messaging functionality
+-   `/api/admin`: Admin-specific actions
+-   `/api/ai`: AI-powered features (chatbot, recommendations, etc.)
+
+For detailed information about each endpoint, please refer to the route files in the `backend/src/routes` directory.
+
+## Project Structure
+
+The project is organized into two main directories: `frontend` and `backend`.
+
+### `backend`
+```
+backend/
+├── src/
+│   ├── config/       # Database configuration
+│   ├── middleware/   # Express middleware (e.g., auth)
+│   ├── models/       # Mongoose models
+│   ├── routes/       # API routes
+│   └── server.js     # Express server entry point
+├── .env.example    # Example environment variables
+├── package.json
+└── seed.js         # Database seeding script
+```
+
+### `frontend`
+```
+frontend/
+├── public/         # Public assets
+├── src/
+│   ├── components/   # Reusable React components
+│   ├── pages/        # Page components
+│   ├── services/     # API service functions
+│   ├── App.js        # Main application component
+│   └── index.js      # React entry point
+├── .env.example    # Example environment variables
+└── package.json
+```
 ## Contributing
 
 Contributions are welcome! If you have any ideas, suggestions, or bug reports, please open an issue or submit a pull request.
