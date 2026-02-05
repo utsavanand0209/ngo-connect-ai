@@ -42,7 +42,7 @@ NGO-Connect is a full-stack AI-enabled platform connecting NGOs, donors, and vol
 - **Rich NGO Profiles:** Detailed, visually rich profiles with programs, people, impact metrics, financials (with graphs), badges, and more.
 - **Campaign Management:** NGOs can create, update, and manage fundraising and volunteering campaigns. Users can browse, search, and filter campaigns by category and location.
 - **Donation & Volunteering:** Secure donation system and volunteer sign-up for campaigns. Users can track their contributions and volunteering history.
-- **AI Chatbot:** Smart, rule-based assistant answers questions, recommends NGOs, and helps users navigate the platform.
+- **AI Chatbot:** Smart assistant powered by Google's Gemini 2.5 Flash model. It answers questions, recommends NGOs, and helps users navigate the platform using a `v1beta` API endpoint.
 - **Personalized Dashboards:** Separate dashboards for users, NGOs, and admins, showing stats, recent activity, and quick actions.
 - **Admin Tools:** Admin dashboard for verifying NGOs, managing users, and reviewing registrations.
 - **Messaging:** In-app messaging between users and NGOs for direct communication.
@@ -71,67 +71,84 @@ NGO-Connect is a full-stack AI-enabled platform connecting NGOs, donors, and vol
 - Bcryptjs (passwords)
 - Multer (uploads)
 - CORS, Dotenv
+- @google/generative-ai
 
 **AI/Smart Features:**
+- AI Chatbot powered by Google Gemini 2.5 Flash
 - Rule-based AI endpoints (recommendation, classification, chatbot, fraud scoring, volunteer matching)
-- AI-powered campaign classification and NGO recommendations
 
 **Other:**
 - Admin dashboard, messaging, RESTful API, rich seed data
 
 
-## Current Progress (Jan 2026)
+## Current Progress (Feb 2026)
 
 - All major modules implemented: authentication, NGO/user/admin dashboards, campaign management, donations, messaging, AI chatbot, search, and profile management.
+- Chatbot functionality updated to use the latest Gemini 2.5 Flash model via the `v1beta` API.
 - Fully demo-ready: visually rich, interactive, and populated with realistic data for all sections.
-- GitHub repo cleaned and pushed (no large files tracked).
+- GitHub repo cleaned and pushed.
 - Tech stack and codebase up to date with modern best practices.
 
 ---
 
+## Implementation Highlights
+
+### AI Chatbot with Gemini 2.5 Flash
+
+The chatbot is a key feature of NGO-Connect. It uses the `@google/generative-ai` library to connect to Google's Gemini models.
+
+-   **Model:** The chatbot uses the `gemini-2.5-flash` model, a powerful and recent model from Google.
+-   **API Version:** The connection is made using the `v1beta` API version, which is necessary to access the latest models. This is specified in the `getGenerativeModel` call in `backend/src/routes/ai.js`.
+
+```javascript
+// backend/src/routes/ai.js
+const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash"
+}, { apiVersion: 'v1beta' });
+```
+
+This ensures the chatbot can leverage the latest AI capabilities for providing helpful responses to users.
+
+
 ## Installation
 
-To get started with NGO-Connect, follow these steps:
+To get started with NGO-Connect on a new machine, follow these steps:
 
 1.  **Clone the repository:**
 
     ```bash
-    git clone https://github.com/your-username/Ngo-Connect.git
+    git clone https://github.com/utsavanand0209/ngo-connect-ai.git
+    cd ngo-connect-ai
     ```
 
-2.  **Navigate to the project directory:**
-
-    ```bash
-    cd Ngo-Connect
-    ```
-
-3.  **Install backend dependencies:**
+2.  **Install backend dependencies:**
 
     ```bash
     cd backend
     npm install
     ```
 
-4.  **Install frontend dependencies:**
+3.  **Install frontend dependencies:**
 
     ```bash
     cd ../frontend
     npm install
     ```
 
-5.  **Set up environment variables:**
+4.  **Set up environment variables:**
 
-    *   In the `backend` directory, create a `.env` file and add the following variables:
+    *   In the `backend` directory, create a `.env` file. This file stores sensitive information and should not be committed to version control. Add the following variables:
 
         ```
-        PORT=5000
-        MONGO_URI=<your_mongodb_uri>
-        JWT_SECRET=<your_jwt_secret>
+        PORT=5001
+        MONGO_URI=<your_mongodb_uri> # Your MongoDB connection string
+        JWT_SECRET=<your_jwt_secret> # A secret key for signing JSON Web Tokens
+        GEMINI_API_KEY=<your_gemini_api_key> # Your API key from Google AI Studio
         ```
 
     *   In the `frontend` directory, create a `.env` file and add the following variable:
         ```
-        REACT_APP_API_URL=http://localhost:5000/api
+        REACT_APP_API_URL=http://localhost:5001/api
         ```
 
 6.  **Run the application:**
@@ -153,4 +170,3 @@ The application will be available at `http://localhost:3000`.
 ## Contributing
 
 Contributions are welcome! If you have any ideas, suggestions, or bug reports, please open an issue or submit a pull request.
-               
