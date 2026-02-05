@@ -3,6 +3,7 @@ const CampaignSchema = new mongoose.Schema({
   ngo: { type: mongoose.Schema.Types.ObjectId, ref: 'NGO', required: true },
   title: { type: String, required: true },
   description: String,
+  image: String,
   category: String,
   location: String,
   goalAmount: Number,

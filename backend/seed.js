@@ -1,125 +1,131 @@
-// New seed file for NGOs with detailed fields, inspired by give.do format
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const User = require('./src/models/User');
 const NGO = require('./src/models/NGO');
-const MONGO_URI = require('./src/config/db').mongoURI;
+const Campaign = require('./src/models/Campaign');
+const connectDB = require('./src/config/db');
+const { faker } = require('@faker-js/faker/locale/en');
 
-const ngos = [
-  // ...existing NGOs with all fields...
-  // Add a new, extremely rich mock NGO for demo
-  {
-    name: "Bright Future Foundation",
-    logo: "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91",
-    badges: ["FCRA", "80G", "12A", "CSR-1", "ISO 9001"],
-    transparency: "Platinum Certified 2025",
-    mission: "Empowering communities through education, healthcare, and sustainable development.",
-    primarySectors: ["Education", "Healthcare", "Women Empowerment", "Sustainability", "Technology"],
-    secondarySectors: ["Vocational Training", "Microfinance", "Clean Water", "Renewable Energy", "Digital Literacy", "Disaster Relief", "Nutrition"],
-    financials: {
-      years: [2019, 2020, 2021, 2022, 2023, 2024],
-      income: [50000000, 60000000, 75000000, 90000000, 120000000, 135000000],
-      expenses: [45000000, 58000000, 70000000, 85000000, 110000000, 125000000],
-      nonProgram: 8000000,
-      program: 117000000
-    },
-    geographies: ["Bangalore", "Mysore", "Chennai", "Hyderabad", "Delhi"],
-    programs: [
-      { name: "Smart Schools Initiative", img: "https://images.unsplash.com/photo-1465101178521-c1a9136a3b99", desc: "Transforming rural schools with smart classrooms, e-learning, and teacher training. Over 200 schools upgraded in 3 years." },
-      { name: "Women in Tech", img: "https://images.unsplash.com/photo-1515378791036-0648a3ef77b2", desc: "Scholarships, coding bootcamps, and mentorship for 1,000+ girls and women in STEM." },
-      { name: "Clean Water for All", img: "https://images.unsplash.com/photo-1506744038136-46273834b3fb", desc: "Installed 150+ water purification systems in villages, impacting 50,000+ lives." },
-      { name: "Green Energy Villages", img: "https://images.unsplash.com/photo-1464983953574-0892a716854b", desc: "Solar microgrids and biogas plants for 30+ off-grid communities." },
-      { name: "Disaster Response Force", img: "https://images.unsplash.com/photo-1504674900247-0877df9cc836", desc: "Rapid response teams for floods, earthquakes, and pandemics. 10,000+ relief kits distributed." }
-    ],
-    impactMetrics: [
-      "250,000+ Beneficiaries in 2025",
-      "1,200+ Teachers Trained",
-      "5,000+ Women Placed in Tech Jobs",
-      "3,000+ Families with Clean Water",
-      "100,000+ Trees Planted",
-      "20,000+ Solar Lamps Distributed",
-      "15,000+ Disaster Relief Kits Provided",
-      "Annual Literacy Rate Increase: 12%",
-      "Dropout Rate Reduced by 30%"
-    ],
-    leadership: [
-      { name: "Dr. Asha Rao", role: "Founder & Chairperson", linkedin: "https://linkedin.com/in/asharao", photo: "https://randomuser.me/api/portraits/women/60.jpg" },
-      { name: "Ravi Kumar", role: "CEO", linkedin: "https://linkedin.com/in/ravikumar", photo: "https://randomuser.me/api/portraits/men/61.jpg" },
-      { name: "Meera Iyer", role: "Director of Programs", linkedin: "https://linkedin.com/in/meera-iyer", photo: "https://randomuser.me/api/portraits/women/62.jpg" },
-      { name: "Sandeep Singh", role: "Head of Technology", linkedin: "https://linkedin.com/in/sandeepsingh", photo: "https://randomuser.me/api/portraits/men/63.jpg" },
-      { name: "Priya Nair", role: "Finance Manager", linkedin: "https://linkedin.com/in/priyanair", photo: "https://randomuser.me/api/portraits/women/64.jpg" },
-      { name: "Vikram Joshi", role: "Field Operations Lead", linkedin: "https://linkedin.com/in/vikramjoshi", photo: "https://randomuser.me/api/portraits/men/65.jpg" },
-      { name: "Sunita Sharma", role: "Community Engagement", linkedin: "https://linkedin.com/in/sunitasharma", photo: "https://randomuser.me/api/portraits/women/66.jpg" },
-      { name: "Ajay Patel", role: "Monitoring & Evaluation", linkedin: "https://linkedin.com/in/ajaypatel", photo: "https://randomuser.me/api/portraits/men/67.jpg" }
-    ],
-    orgStrength: 120,
-    orgStructure: "Hierarchical with regional offices and field teams.",
-    registration: {
-      pan: "AAABF1234G",
-      regNo: "BNG(U)-JNR-IV-999-2010-11",
-      csr: "CSR00009999",
-      g80: "AAABF1234GF20126",
-      a12: "AAABF1234GE20045",
-      fcra: "094421399"
-    },
-    about: "Bright Future Foundation is a multi-award-winning NGO dedicated to holistic community development. Our mission is to bridge the urban-rural divide through innovative programs in education, health, and sustainability. We partner with governments, corporates, and local leaders to maximize impact.",
-    impact: "In 2025 alone, we reached over 250,000 beneficiaries, planted 100,000 trees, and provided clean water to 3,000+ families. Our disaster response teams have delivered aid to 15,000+ families in crisis.",
-    vision: "A world where every community thrives with dignity, opportunity, and hope.",
-    address: "#101, Sunrise Towers, MG Road, Bangalore, Karnataka, 560001",
-    offices: ["Bangalore HQ", "Mysore Regional Office", "Delhi Liaison Office", "Chennai Field Office"],
-    type: "Non-profit",
-    subType: "Section 8 Company",
-    website: "https://brightfuture.org/",
-    socials: {
-      youtube: "https://youtube.com/brightfuturefoundation",
-      linkedin: "https://linkedin.com/company/brightfuturefoundation",
-      facebook: "https://facebook.com/brightfuturefoundation",
-      instagram: "https://instagram.com/brightfuturefoundation",
-      twitter: "https://twitter.com/brightfutureorg"
-    },
-    tech: {
-      soc2: true,
-      financial: true,
-      beneficiary: true
-    }
-  }
-];
-
-async function seed() {
+const seedDatabase = async () => {
   try {
-    await mongoose.connect(MONGO_URI);
-    await NGO.deleteMany({});
-    await NGO.insertMany(ngos);
-    console.log('NGO seed data inserted successfully!');
-    process.exit(0);
-  } catch (err) {
-    console.error('Error seeding NGOs:', err);
-    process.exit(1);
-  }
-}
+    await connectDB(process.env.MONGO_URI || 'mongodb://localhost:27017/ngo-connect');
 
-seed();
-    const campaigns = [];
-    for (let i = 1; i <= 100; i++) {
-      const isFundraising = i <= 50;
-      campaigns.push({
-        ngo: createdNGOs[i % createdNGOs.length]._id,
-        title: isFundraising ? `Fundraising Campaign ${i}` : `Volunteering Campaign ${i-50}`,
-        description: isFundraising
-          ? `Help us raise funds for cause ${i}`
-          : `Join us to volunteer for cause ${i-50}`,
-        category: categories[i % categories.length],
-        location: cities[i % cities.length],
-        goalAmount: isFundraising ? 100000 + i * 1000 : 0,
-        currentAmount: isFundraising ? Math.floor((100000 + i * 1000) * Math.random()) : 0,
-        volunteersNeeded: isFundraising ? [] : ['General', 'Specialist'],
-        volunteers: isFundraising ? [] : [createdUsers[i % createdUsers.length]._id]
+    // Clear existing data
+    await User.deleteMany({});
+    await NGO.deleteMany({});
+    await Campaign.deleteMany({});
+
+    console.log('🧹 Cleared existing data');
+
+    // --- CREATE USERS ---
+    const users = [];
+    const hashedPassword = await bcrypt.hash('password123', 10);
+
+    for (let i = 0; i < 50; i++) {
+      users.push({
+        name: faker.person.fullName(),
+        email: faker.internet.email(),
+        password: hashedPassword,
+        role: 'user',
+        interests: faker.helpers.arrayElements(['Education', 'Health', 'Environment', 'Animals', 'Human Rights', 'Arts & Culture'], 2),
+        skills: faker.helpers.arrayElements(['Marketing', 'Writing', 'Design', 'Development', 'Management', 'Fundraising'], 2)
       });
+    }
+    users.push({
+      name: 'Rahul Kumar',
+      email: 'rahul@example.com',
+      password: hashedPassword,
+      role: 'user'
+    })
+
+    const createdUsers = await User.insertMany(users);
+    console.log(`✅ Created ${createdUsers.length} sample users`);
+
+    // --- CREATE NGOs ---
+    const ngos = [];
+    const categories = ['Education', 'Health', 'Food', 'Environment', 'Animals', 'Human Rights', 'Arts & Culture'];
+    const cities = ['Delhi', 'Mumbai', 'Bangalore', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune'];
+
+    for (let i = 0; i < 15; i++) {
+        const financials = {
+            years: [2020, 2021, 2022, 2023, 2024],
+            income: [],
+            expenses: []
+        };
+        for (let j = 0; j < 5; j++) {
+            const income = faker.finance.amount({ min: 100000, max: 2000000, dec: 0 });
+            const expenses = income * faker.number.float({ min: 0.7, max: 0.95, precision: 0.01 });
+            financials.income.push(income);
+            financials.expenses.push(expenses);
+        }
+        financials.nonProgram = financials.expenses[4] * faker.number.float({ min: 0.1, max: 0.2, precision: 0.01 });
+        financials.program = financials.expenses[4] - financials.nonProgram;
+
+        ngos.push({
+            name: faker.company.name() + ' Foundation',
+            email: faker.internet.email(),
+            password: hashedPassword,
+            role: 'ngo',
+            verified: faker.datatype.boolean(0.8), // 80% chance of being verified
+            logo: faker.image.url(),
+            badges: faker.helpers.arrayElements(["FCRA", "80G", "12A", "CSR-1"], faker.number.int({ min: 1, max: 4 })),
+            transparency: faker.helpers.arrayElement(['Gold Certified', 'Silver Certified', 'Platinum Certified', 'Not Certified']),
+            mission: faker.company.catchPhrase(),
+            about: faker.commerce.productDescription(),
+            vision: faker.company.buzzPhrase(),
+            primarySectors: faker.helpers.arrayElements(categories, faker.number.int({ min: 1, max: 3 })),
+            secondarySectors: faker.helpers.arrayElements(categories, faker.number.int({ min: 1, max: 2 })),
+            financials: financials,
+            geographies: faker.helpers.arrayElements(cities, faker.number.int({ min: 1, max: 3 })),
+            programs: Array.from({ length: faker.number.int({ min: 2, max: 5 }) }, () => ({
+                name: faker.commerce.productName(),
+                img: faker.image.url(),
+                desc: faker.commerce.productDescription()
+            })),
+            impactMetrics: Array.from({ length: faker.number.int({ min: 3, max: 6 }) }, () => faker.company.catchPhrase()),
+            leadership: Array.from({ length: faker.number.int({ min: 2, max: 5 }) }, () => ({
+                name: faker.person.fullName(),
+                role: faker.person.jobTitle(),
+                linkedin: `https://linkedin.com/in/${faker.person.firstName().toLowerCase()}`,
+                photo: faker.image.avatar()
+            })),
+            orgStrength: faker.number.int({ min: 10, max: 500 }),
+            orgStructure: faker.company.buzzPhrase(),
+            registration: {
+                pan: faker.string.alphanumeric(10).toUpperCase(),
+                regNo: faker.string.alphanumeric(15).toUpperCase(),
+            },
+            address: faker.location.streetAddress(),
+            website: faker.internet.url(),
+        });
+    }
+
+    const createdNGOs = await NGO.insertMany(ngos);
+    console.log(`✅ Created ${createdNGOs.length} sample NGOs`);
+
+    // --- CREATE CAMPAIGNS ---
+    const campaigns = [];
+    for (let i = 0; i < 40; i++) {
+        const isFundraising = faker.datatype.boolean();
+        campaigns.push({
+            ngo: faker.helpers.arrayElement(createdNGOs)._id,
+            title: faker.commerce.productName(),
+            description: faker.commerce.productDescription(),
+            image: faker.image.url(),
+            category: faker.helpers.arrayElement(categories),
+            location: faker.helpers.arrayElement(cities),
+            goalAmount: isFundraising ? faker.finance.amount({ min: 50000, max: 1000000, dec: 0 }) : 0,
+            currentAmount: isFundraising ? faker.finance.amount({ min: 0, max: 40000, dec: 0 }) : 0,
+            volunteersNeeded: isFundraising ? [] : ['General', 'Specialist', 'Marketing', 'Events'],
+            volunteers: isFundraising ? [] : faker.helpers.arrayElements(createdUsers, faker.number.int({ min: 0, max: 10 })).map(u => u._id)
+        });
     }
 
     const createdCampaigns = await Campaign.insertMany(campaigns);
     console.log(`✅ Created ${createdCampaigns.length} sample campaigns`);
 
     // Create admin user
-    const adminUser = await User.create({
+    await User.create({
       name: 'Admin User',
       email: 'admin@ngoconnect.org',
       password: hashedPassword,
@@ -127,13 +133,16 @@ seed();
     });
     console.log(`✅ Created admin user: admin@ngoconnect.org`);
 
-    console.log('\n🎉 Database seeded successfully!\n');
+    console.log(`
+🎉 Database seeded successfully!
+`);
     console.log('📝 Test Credentials:');
     console.log('─────────────────────────────────────────');
     console.log('Admin: admin@ngoconnect.org / password123');
     console.log('User: rahul@example.com / password123');
-    console.log('NGO: eduforall@ngo.org / password123');
-    console.log('─────────────────────────────────────────\n');
+    console.log(`NGO: ${ngos[0].email} / password123`);
+    console.log(`─────────────────────────────────────────
+`);
 
     process.exit(0);
   } catch (err) {

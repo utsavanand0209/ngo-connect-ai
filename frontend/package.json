@@ -37,6 +37,7 @@
     ]
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.2.0",
     "@types/google-one-tap": "^1.2.7"
   }
 }
