@@ -4,6 +4,15 @@ const AILog = require('../models/AILog');
 const NGO = require('../models/NGO');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// Initialize Google Generative AI
+let genAI;
+if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "YOUR_API_KEY_HERE") {
+  genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+} else {
+  console.warn("GEMINI_API_KEY not found or is a placeholder. Chatbot will use fallback responses.");
+}
 
 // Rule-based recommendation: simple scoring
 router.post('/recommend-ngos', async (req, res) => {
@@ -48,67 +57,87 @@ router.post('/classify-campaign', async (req, res) => {
   }
 });
 
-// Chatbot (rule-based)
+// Chatbot (LLM-powered)
 router.post('/chat', async (req, res) => {
+  if (!genAI) {
+    return res.status(500).json({ 
+      reply: "The chatbot is not configured. Please provide a valid GEMINI_API_KEY in the backend's .env file." 
+    });
+  }
+
   try {
     const { message } = req.body;
     const m = (message || '').toLowerCase();
-    let reply = "I'm NGO Connect bot. Ask me about NGOs, social work, registration, recommendations, or platform features.";
+    
+        const model = genAI.getGenerativeModel({ 
+        model: "gemini-2.5-flash" 
+    }, { apiVersion: 'v1beta' });
 
-    // FAQ and smart answers
-    if (m.includes('register')) {
-      reply = 'To register, go to the Register page and choose User or NGO. NGOs must upload verification documents for admin approval.';
-    } else if (m.includes('recommend')) {
-      reply = 'I can recommend NGOs based on your interests and location. Try: "Recommend NGOs for education in Bangalore".';
-    } else if (m.includes('ngo') && m.includes('verify')) {
-      reply = 'NGOs are verified by admins after reviewing their documents. Only verified NGOs can post campaigns.';
-    } else if (m.includes('how many ngos')) {
-      const ngoCount = await NGO.countDocuments({});
-      reply = `There are currently ${ngoCount} NGOs registered on the platform.`;
-    } else if (m.match(/top|best|popular/) && m.includes('ngo')) {
-      const ngos = await NGO.find({ verified: true }).sort({ createdAt: -1 }).limit(3);
-      reply = 'Here are some NGOs you might like: ' + ngos.map(n => n.name).join(', ') + '.';
-    } else if (m.includes('campaign')) {
-      reply = 'Campaigns are fundraising or volunteering opportunities posted by NGOs. You can view and support them from the Campaigns page.';
-    } else if (m.includes('donate')) {
-      reply = 'To donate, go to the Campaigns page, select a campaign, and click Donate. You can pay securely online.';
-    } else if (m.includes('volunteer')) {
-      reply = 'To volunteer, browse volunteering campaigns or contact NGOs directly from their profile pages.';
-    } else if (m.includes('impact')) {
-      const ngo = await NGO.findOne({ verified: true }).sort({ createdAt: -1 });
-      if (ngo && ngo.impactMetrics && ngo.impactMetrics.length > 0) {
-        reply = `Example impact: ${ngo.name} - ${ngo.impactMetrics.slice(0,3).join('; ')}.`;
-      } else {
-        reply = 'Many NGOs share their impact metrics on their profile pages.';
+    // --- Basic RAG (Retrieval-Augmented Generation) ---
+    let context = "";
+    // 1. Check for location-based queries
+    if (m.includes(' in ')) {
+      const parts = m.split(' in ');
+      const potentialLocation = parts[parts.length - 1].replace('?', '').trim();
+      const ngos = await NGO.find({ 
+        verified: true,
+        location: new RegExp(potentialLocation, 'i') 
+      }).limit(5).select('name description category');
+      
+      if (ngos.length > 0) {
+        context += `\n\nHere is some data from the database about NGOs in "${potentialLocation}":\n`;
+        context += ngos.map(n => `- ${n.name}: ${n.description} (Category: ${n.category})`).join('\n');
       }
-    } else if (m.includes('contact')) {
-      reply = 'You can contact NGOs via their profile pages using the provided contact links or social media.';
-    } else if (m.includes('about you') || m.includes('who are you')) {
-      reply = "I'm an AI-powered assistant for NGO Connect. I can answer questions about NGOs, social work, and platform features.";
-    } else if (m.includes('list ngos in')) {
-      // e.g. "list ngos in bangalore"
-      const city = m.split('list ngos in')[1]?.trim().split(' ')[0];
-      if (city) {
-        const ngos = await NGO.find({ location: new RegExp(city, 'i'), verified: true }).limit(5);
-        if (ngos.length > 0) {
-          reply = `NGOs in ${city}: ` + ngos.map(n => n.name).join(', ') + '.';
-        } else {
-          reply = `No NGOs found in ${city}.`;
-        }
-      } else {
-        reply = 'Please specify a city, e.g., "List NGOs in Bangalore".';
-      }
-    } else if (m.includes('sector') || m.includes('cause area')) {
-      const sectors = await NGO.distinct('primarySectors');
-      reply = 'Some cause areas on the platform: ' + sectors.filter(Boolean).slice(0, 8).join(', ') + '.';
-    } else if (m.includes('help') || m.includes('feature')) {
-      reply = 'You can ask me about NGO registration, verification, donations, volunteering, campaigns, impact, or how to use the platform.';
     }
+    // 2. Check for category-based queries
+    else if (m.includes(' for ') || m.includes(' about ')) {
+      const parts = m.split(/ for | about /);
+      const potentialCategory = parts[parts.length - 1].replace('?', '').trim();
+      const ngos = await NGO.find({ 
+        verified: true,
+        category: new RegExp(potentialCategory, 'i') 
+      }).limit(5).select('name description category');
+      
+      if (ngos.length > 0) {
+        context += `\n\nHere is some data from the database about NGOs related to "${potentialCategory}":\n`;
+        context += ngos.map(n => `- ${n.name}: ${n.description} (Category: ${n.category})`).join('\n');
+      }
+    }
+
+    const prompt = `
+      You are "NGO Connect Bot", a friendly and helpful AI assistant for the NGO Connect web platform.
+      Your goal is to guide users, answer their questions about the platform, and help them find NGOs and campaigns.
+      
+      Platform Features:
+      - Users can register as a regular user or as an NGO.
+      - NGOs must be verified by an admin before they can create campaigns. They do this by uploading documents through their profile.
+      - Users can browse a list of verified NGOs and active campaigns (for fundraising or volunteering).
+      - Users can donate to campaigns or sign up to volunteer.
+      - Users can find NGOs based on their category (e.g., education, health) and location.
+
+      Instructions:
+      - Be conversational and encouraging.
+      - If you are asked to recommend NGOs, use the data provided in the context below.
+      - If no specific data is provided in the context, you can answer general questions about the platform, but do NOT invent NGO names or details. Instead, guide the user on how to search for them on the platform (e.g., "You can browse all NGOs on the NGOs page!").
+      - Keep your answers concise and to the point.
+      
+      ${context ? `CONTEXT FROM DATABASE:\n${context}` : ''}
+
+      USER'S QUESTION: "${message}"
+
+      YOUR RESPONSE:
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const reply = response.text();
 
     await AILog.create({ type: 'chat', payload: { message }, result: { reply } });
     res.json({ reply });
+
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    console.error("Chatbot API error:", err);
+    res.status(500).json({ reply: 'Sorry, I am having trouble connecting to my brain right now. Please try again later.' });
   }
 });
 

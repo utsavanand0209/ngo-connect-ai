@@ -1,7 +1,14 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    setIsAuthenticated(!!token);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-600 to-blue-400">
       <div className="max-w-4xl mx-auto px-6 py-20">
@@ -28,40 +35,54 @@ export default function Home() {
           </div>
         </div>
 
-        {/* CTA Buttons */}
+        {/* CTA Section */}
         <div className="bg-white rounded-lg p-12 shadow-xl text-center">
-          <h2 className="text-3xl font-bold text-gray-800 mb-8">Get Started Today</h2>
-          
-          <div className="space-y-4">
+          {isAuthenticated ? (
             <div>
-              <p className="text-gray-600 mb-4">New to NGO Connect? Create your account</p>
+              <h2 className="text-3xl font-bold text-gray-800 mb-4">Welcome Back!</h2>
+              <p className="text-gray-600 mb-8">You're already logged in. Head to your dashboard to manage your activities.</p>
               <Link 
-                to="/register" 
-                className="inline-block px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition"
-              >
-                Register Now
-              </Link>
-            </div>
-
-            <div className="my-6 flex items-center">
-              <div className="flex-1 border-t border-gray-300"></div>
-              <span className="px-4 text-gray-600 font-semibold">or</span>
-              <div className="flex-1 border-t border-gray-300"></div>
-            </div>
-
-            <div>
-              <p className="text-gray-600 mb-4">Already have an account? Sign in</p>
-              <Link 
-                to="/login" 
+                to="/dashboard" 
                 className="inline-block px-8 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition"
               >
-                Login
+                Go to Dashboard
               </Link>
             </div>
-          </div>
+          ) : (
+            <div>
+              <h2 className="text-3xl font-bold text-gray-800 mb-8">Get Started Today</h2>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-gray-600 mb-4">New to NGO Connect? Create your account</p>
+                  <Link 
+                    to="/register" 
+                    className="inline-block px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition"
+                  >
+                    Register Now
+                  </Link>
+                </div>
+
+                <div className="my-6 flex items-center">
+                  <div className="flex-1 border-t border-gray-300"></div>
+                  <span className="px-4 text-gray-600 font-semibold">or</span>
+                  <div className="flex-1 border-t border-gray-300"></div>
+                </div>
+
+                <div>
+                  <p className="text-gray-600 mb-4">Already have an account? Sign in</p>
+                  <Link 
+                    to="/login" 
+                    className="inline-block px-8 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition"
+                  >
+                    Login
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="mt-8 pt-8 border-t border-gray-300">
-            <p className="text-gray-600 mb-4">Want to explore first? Browse without signing in</p>
+            <p className="text-gray-600 mb-4">Or, you can explore first without signing in</p>
             <Link 
               to="/ngos" 
               className="inline-block px-6 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition"

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+                                                                                                                                                                                                                                                                                        import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [donationAmount, setDonationAmount] = useState('');
   const [donationLoading, setDonationLoading] = useState(false);
   const [donationMessage, setDonationMessage] = useState('');
+  const [ngo, setNgo] = useState(null);
 
   // Helper to fetch donation and volunteer stats
   const fetchStats = () => {
@@ -53,6 +54,12 @@ export default function Dashboard() {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setRole(payload.role);
         setUser(payload);
+
+        if (payload.role === 'ngo') {
+          api.get('/ngos/me')
+            .then(res => setNgo(res.data))
+            .catch(err => console.error('Failed to fetch NGO profile:', err));
+        }
       } catch (err) {
         console.error('Failed to decode token');
       }
@@ -128,6 +135,10 @@ export default function Dashboard() {
   }
 
   if (role === 'ngo') {
+    const isVerified = ngo?.verified;
+    const isPending = ngo?.verificationDocs?.length > 0 && !ngo.verified;
+    const isDocSubmitted = ngo?.verificationDocs?.length > 0;
+
     return (
       <div className="min-h-screen bg-gray-100 p-6">
         <div className="max-w-6xl mx-auto">
@@ -138,7 +149,13 @@ export default function Dashboard() {
             <div className="bg-white rounded-lg shadow p-6 text-center">
               <p className="text-3xl">📋</p>
               <h3 className="text-gray-600 mt-2">Profile Status</h3>
-              <p className="text-2xl font-bold text-blue-600 mt-2">⏳ Pending</p>
+              {isVerified ? (
+                <p className="text-2xl font-bold text-green-600 mt-2">✅ Verified</p>
+              ) : isPending ? (
+                <p className="text-2xl font-bold text-yellow-600 mt-2">⏳ Pending</p>
+              ) : (
+                <p className="text-2xl font-bold text-red-600 mt-2">❌ Incomplete</p>
+              )}
             </div>
             <div className="bg-white rounded-lg shadow p-6 text-center">
               <p className="text-3xl">📢</p>
@@ -162,8 +179,8 @@ export default function Dashboard() {
               <h2 className="text-2xl font-bold text-gray-800 mb-4">🎯 Quick Actions</h2>
               <div className="space-y-3">
                 <Link to="/ngo/profile" className="block p-4 bg-blue-50 border-l-4 border-blue-600 rounded hover:bg-blue-100 transition">
-                  <span className="font-semibold text-blue-600">Complete Your Profile</span>
-                  <p className="text-sm text-gray-600">Upload verification documents to get verified</p>
+                  <span className="font-semibold text-blue-600">Update Your Profile</span>
+                  <p className="text-sm text-gray-600">Keep your NGO's information up-to-date</p>
                 </Link>
                 <Link to="/campaigns/create" className="block p-4 bg-green-50 border-l-4 border-green-600 rounded hover:bg-green-100 transition">
                   <span className="font-semibold text-green-600">Create New Campaign</span>
@@ -179,19 +196,38 @@ export default function Dashboard() {
             <div className="bg-white rounded-lg shadow-lg p-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-4">📋 Verification Status</h2>
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-yellow-50 rounded">
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
                   <span className="text-gray-700">Documents Submitted</span>
-                  <span className="text-yellow-600 font-bold">⏳ Pending</span>
+                  {isDocSubmitted ? (
+                     <span className="text-green-600 font-bold">✓ Completed</span>
+                  ) : (
+                     <span className="text-yellow-600 font-bold">⏳ Pending</span>
+                  )}
                 </div>
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
                   <span className="text-gray-700">Admin Review</span>
-                  <span className="text-gray-600 font-bold">⏸ Waiting</span>
+                  {isVerified ? (
+                    <span className="text-green-600 font-bold">✓ Approved</span>
+                  ) : isPending ? (
+                    <span className="text-yellow-600 font-bold">⏳ Pending</span>
+                  ) : (
+                    <span className="text-gray-600 font-bold">⏸ Waiting for Docs</span>
+                  )}
                 </div>
-                <div className="mt-4 p-4 bg-blue-50 border-l-4 border-blue-600 rounded">
-                  <p className="text-sm text-blue-900">
-                    <strong>⏱️ Expected Timeline:</strong> Verification takes 24-48 hours. You'll receive an email notification once approved.
-                  </p>
-                </div>
+                {!isVerified && (
+                  <div className="mt-4 p-4 bg-blue-50 border-l-4 border-blue-600 rounded">
+                    <p className="text-sm text-blue-900">
+                      <strong>⏱️ Expected Timeline:</strong> Verification takes 24-48 hours after you submit documents. You'll receive an email notification once approved.
+                    </p>
+                  </div>
+                )}
+                 {isVerified && (
+                  <div className="mt-4 p-4 bg-green-50 border-l-4 border-green-600 rounded">
+                    <p className="text-sm text-green-900">
+                      <strong>🎉 Congratulations!</strong> Your NGO is verified and visible to all users.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

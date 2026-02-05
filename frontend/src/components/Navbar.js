@@ -3,38 +3,28 @@ import { Link } from 'react-router-dom';
 
 export default function Navbar() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userRole, setUserRole] = useState('');
+
+  const handleAuthChange = () => {
+    const token = localStorage.getItem('token');
+    setIsAuthenticated(!!token);
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUserRole(payload.role);
+      } catch (e) {
+        console.error('Failed to parse token:', e);
+        setUserRole('');
+      }
+    } else {
+      setUserRole('');
+    }
+  };
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setIsAuthenticated(false);
-        return;
-      }
-      try {
-        // Use /api/auth/me to check if token is valid
-        const res = await fetch('http://localhost:5001/api/auth/me', {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          setIsAuthenticated(true);
-        } else {
-          localStorage.removeItem('token');
-          setIsAuthenticated(false);
-        }
-      } catch {
-        setIsAuthenticated(false);
-      }
-    };
-
-    checkAuth();
-
-    const handleAuthChange = () => {
-      checkAuth();
-    };
+    handleAuthChange(); // Initial check
     window.addEventListener('authChange', handleAuthChange);
-    window.addEventListener('storage', handleAuthChange);
+    window.addEventListener('storage', handleAuthChange); // Listen for changes across tabs
     return () => {
       window.removeEventListener('authChange', handleAuthChange);
       window.removeEventListener('storage', handleAuthChange);
@@ -44,7 +34,7 @@ export default function Navbar() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     window.dispatchEvent(new Event('authChange'));
-    window.location.href = '/';
+    window.location.href = '/login';
   };
 
   return (
@@ -53,8 +43,9 @@ export default function Navbar() {
       <Link to="/ngos" className="hover:underline">NGOs</Link>
       <Link to="/campaigns" className="hover:underline">Campaigns</Link>
       <Link to="/chatbot" className="hover:underline">Chatbot</Link>
-      {isAuthenticated && <Link to="/ngo/profile" className="hover:underline">NGO Verification</Link>}
-      <div className="ml-auto flex gap-4">
+      {isAuthenticated && userRole === 'ngo' && <Link to="/ngo/profile" className="hover:underline">My NGO Profile</Link>}
+      {isAuthenticated && userRole === 'admin' && <Link to="/admin" className="hover:underline">Admin Panel</Link>}
+      <div className="ml-auto flex gap-4 items-center">
         {isAuthenticated ? (
           <>
             <Link to="/dashboard" className="hover:underline">Dashboard</Link>

@@ -35,5 +35,8 @@
     "transformIgnorePatterns": [
       "node_modules/(?!axios)/"
     ]
+  },
+  "devDependencies": {
+    "@types/google-one-tap": "^1.2.7"
   }
 }
