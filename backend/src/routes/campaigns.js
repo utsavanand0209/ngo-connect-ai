@@ -136,6 +136,11 @@ router.post('/:id/volunteer', auth(['user']), async (req, res) => {
     const user = await User.findById(req.user.id).select('name email mobileNumber');
     if (!user) return res.status(404).json({ message: 'User not found' });
 
+    // Campaign documents created via the API may not include these arrays yet.
+    // Ensure they exist before we use .push/.some against them.
+    if (!Array.isArray(camp.volunteerRegistrations)) camp.volunteerRegistrations = [];
+    if (!Array.isArray(camp.volunteers)) camp.volunteers = [];
+
     const volunteerData = normalizeVolunteerPayload(req.body || {}, user);
     const existingIndex = (camp.volunteerRegistrations || []).findIndex(
       (entry) => String(entry.user) === String(req.user.id)
