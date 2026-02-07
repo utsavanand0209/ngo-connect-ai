@@ -411,14 +411,24 @@ export default function CampaignDetails() {
                   <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm font-semibold">{locationText}</span>
                   {campaign.area && <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-semibold">{campaign.area}</span>}
                 </div>
-                <button
-                  type="button"
-                  onClick={openDirections}
-                  disabled={directionsLoading}
-                  className="mt-4 px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:bg-indigo-300"
-                >
-                  {directionsLoading ? 'Opening Directions...' : 'Get Directions'}
-                </button>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={openDirections}
+                    disabled={directionsLoading}
+                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:bg-indigo-300"
+                  >
+                    {directionsLoading ? 'Opening Directions...' : 'Get Directions'}
+                  </button>
+                  {isUser && (campaign.ngo?.id || campaign.ngo) && (
+                    <Link
+                      to={`/messages?ngo=${campaign.ngo?.id || campaign.ngo}`}
+                      className="px-4 py-2 rounded-lg border border-indigo-200 text-indigo-700 font-semibold hover:bg-indigo-50"
+                    >
+                      Message NGO
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
 

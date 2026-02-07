@@ -86,6 +86,7 @@ export const getDonationReceipt = (donationId) => api.get(`/donations/${donation
 export const initiateDonationPayment = (campaignId, data) => api.post(`/donations/campaign/${campaignId}/initiate`, data);
 export const confirmDonationPayment = (donationId, data) => api.post(`/donations/${donationId}/confirm`, data);
 export const getNgoDonationApprovalQueue = () => api.get('/donations/ngo/pending-approvals');
+export const getNgoDonationTransactions = (params = {}) => api.get('/donations/ngo/transactions', { params });
 export const reviewDonationCertificateRequest = (donationId, data) =>
   api.post(`/donations/${donationId}/certificate/decision`, data);
 export const getMyCertificates = () => api.get('/certificates/my');
@@ -94,8 +95,17 @@ export const downloadCertificate = (certificateId) =>
   api.get(`/certificates/${certificateId}/download`, { responseType: 'blob' });
 
 export const getNgoVolunteerApprovalQueue = () => api.get('/volunteering/approvals/ngo/pending');
+export const getNgoVolunteerRequests = (params = {}) => api.get('/volunteering/ngo/requests', { params });
 export const reviewVolunteerCertificateRequest = (applicationId, data) =>
   api.post(`/volunteering/applications/${applicationId}/certificate/decision`, data);
+
+// Messages
+export const getMessageConversations = () => api.get('/messages/conversations');
+export const getMessageThread = (counterpartId) => api.get(`/messages/thread/${counterpartId}`);
+export const markMessageThreadRead = (counterpartId) => api.post(`/messages/thread/${counterpartId}/read`);
+export const sendMessageToNgo = (ngoId, body) => api.post(`/messages/to-ngo/${ngoId}`, { body });
+export const sendMessageToAllNgos = (body) => api.post('/messages/to-all-ngos', { body });
+export const sendMessageToUser = (userId, body) => api.post(`/messages/to-user/${userId}`, { body });
 
 // User preferences for AI recommendations
 export const getUserPreferences = () => api.get('/users/preferences');

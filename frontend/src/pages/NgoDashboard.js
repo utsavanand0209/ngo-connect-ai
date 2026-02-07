@@ -1,80 +1,58 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../services/api';
-import {
-  getNgoHelpRequests,
-  updateHelpRequestStatus,
+import api, {
+  getMessageConversations,
   getNgoDonationApprovalQueue,
-  reviewDonationCertificateRequest,
+  getNgoDonationTransactions,
   getNgoVolunteerApprovalQueue,
+  getNgoVolunteerRequests,
+  reviewDonationCertificateRequest,
   reviewVolunteerCertificateRequest
 } from '../services/api';
 
+const currency = (value) => `Rs ${Number(value || 0).toLocaleString('en-IN')}`;
+const when = (value) => {
+  if (!value) return 'N/A';
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return 'N/A';
+  return dt.toLocaleString();
+};
+
 export default function NgoDashboard() {
-  const [user, setUser] = useState(null);
-  const [ngo, setNgo] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [campaigns, setCampaigns] = useState([]);
-  const [campaignStats, setCampaignStats] = useState({ totalDonations: 0, volunteerCount: 0 });
-  const [notifications, setNotifications] = useState([]);
-  const [notificationsLoading, setNotificationsLoading] = useState(true);
-  const [helpRequests, setHelpRequests] = useState([]);
-  const [requestMessage, setRequestMessage] = useState('');
+  const [ngo, setNgo] = useState(null);
+
+  const [donationSummary, setDonationSummary] = useState({
+    completedCount: 0,
+    totalCompletedAmount: 0,
+    pendingCertificateCount: 0
+  });
+  const [donationTransactions, setDonationTransactions] = useState([]);
+
+  const [volunteerSummary, setVolunteerSummary] = useState({
+    totalRequests: 0,
+    appliedCount: 0,
+    assignedCount: 0,
+    completedCount: 0,
+    withdrawnCount: 0,
+    pendingCertificateCount: 0
+  });
+  const [volunteerRequests, setVolunteerRequests] = useState([]);
+
   const [donationApprovals, setDonationApprovals] = useState([]);
   const [volunteerApprovals, setVolunteerApprovals] = useState([]);
   const [approvalLoading, setApprovalLoading] = useState(true);
-  const [approvalMessage, setApprovalMessage] = useState('');
   const [approvalNotes, setApprovalNotes] = useState({});
+  const [approvalMessage, setApprovalMessage] = useState('');
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setUser(payload);
+  const [messageUnreadCount, setMessageUnreadCount] = useState(0);
 
-        if (payload.role === 'ngo') {
-          api.get('/ngos/me')
-            .then(async res => {
-              setNgo(res.data);
-              const ngoId = res.data.id;
-              try {
-                const campRes = await api.get('/campaigns');
-                const related = campRes.data.filter(c => (c.ngo?.id || c.ngo) === ngoId);
-                setCampaigns(related);
-                const totalDonations = related.reduce((sum, c) => sum + (Number(c.currentAmount) || 0), 0);
-                const volunteerCount = related.reduce((sum, c) => sum + ((c.volunteers || []).length), 0);
-                setCampaignStats({ totalDonations, volunteerCount });
-              } catch (err) {
-                console.error('Failed to fetch campaigns:', err);
-                setCampaigns([]);
-                setCampaignStats({ totalDonations: 0, volunteerCount: 0 });
-              }
-            })
-            .catch(err => console.error('Failed to fetch NGO profile:', err))
-            .finally(() => setLoading(false));
-        } else {
-            setLoading(false);
-        }
-      } catch (err) {
-        console.error('Failed to decode token');
-        setLoading(false);
-      }
-    } else {
-        setLoading(false);
-    }
+  const pendingCertificateTotal = useMemo(
+    () => Number(donationSummary.pendingCertificateCount || 0) + Number(volunteerSummary.pendingCertificateCount || 0),
+    [donationSummary, volunteerSummary]
+  );
 
-    api.get('/notifications')
-      .then(res => setNotifications(res.data || []))
-      .catch(() => setNotifications([]))
-      .finally(() => setNotificationsLoading(false));
-
-    getNgoHelpRequests()
-      .then(res => setHelpRequests(res.data || []))
-      .catch(() => setHelpRequests([]));
-
-    loadApprovals();
-  }, []);
+  const isVerified = ngo?.verified;
 
   const loadApprovals = async () => {
     setApprovalLoading(true);
@@ -93,353 +71,358 @@ export default function NgoDashboard() {
     }
   };
 
-  const handleApprovalNoteChange = (key, value) => {
-    setApprovalNotes(prev => ({ ...prev, [key]: value }));
+  const loadDashboardData = async () => {
+    setLoading(true);
+    try {
+      const [ngoRes, donationRes, volunteerRes, conversationsRes] = await Promise.all([
+        api.get('/ngos/me'),
+        getNgoDonationTransactions({ limit: 25 }),
+        getNgoVolunteerRequests({ limit: 25 }),
+        getMessageConversations()
+      ]);
+
+      setNgo(ngoRes.data || null);
+      setDonationSummary(donationRes.data?.summary || {
+        completedCount: 0,
+        totalCompletedAmount: 0,
+        pendingCertificateCount: 0
+      });
+      setDonationTransactions(donationRes.data?.transactions || []);
+
+      setVolunteerSummary(volunteerRes.data?.summary || {
+        totalRequests: 0,
+        appliedCount: 0,
+        assignedCount: 0,
+        completedCount: 0,
+        withdrawnCount: 0,
+        pendingCertificateCount: 0
+      });
+      setVolunteerRequests(volunteerRes.data?.requests || []);
+
+      const conversations = conversationsRes.data || [];
+      const unread = conversations.reduce((sum, item) => sum + Number(item?.unreadCount || 0), 0);
+      setMessageUnreadCount(unread);
+    } catch (err) {
+      setNgo(null);
+      setDonationSummary({ completedCount: 0, totalCompletedAmount: 0, pendingCertificateCount: 0 });
+      setDonationTransactions([]);
+      setVolunteerSummary({ totalRequests: 0, appliedCount: 0, assignedCount: 0, completedCount: 0, withdrawnCount: 0, pendingCertificateCount: 0 });
+      setVolunteerRequests([]);
+      setMessageUnreadCount(0);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDonationCertificateDecision = async (donationId, decision) => {
+  useEffect(() => {
+    loadDashboardData();
+    loadApprovals();
+  }, []);
+
+  const handleApprovalNoteChange = (key, value) => {
+    setApprovalNotes((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleDonationDecision = async (donationId, decision) => {
     try {
       const noteKey = `donation-${donationId}`;
       await reviewDonationCertificateRequest(donationId, {
         decision,
         note: approvalNotes[noteKey] || ''
       });
-      setApprovalMessage(`Donation certificate request ${decision === 'approve' ? 'approved' : 'rejected'}.`);
-      loadApprovals();
+      setApprovalMessage(`Donation certificate ${decision === 'approve' ? 'approved' : 'rejected'} successfully.`);
+      await Promise.all([loadApprovals(), loadDashboardData()]);
     } catch (err) {
-      setApprovalMessage(err.response?.data?.message || 'Failed to process donation approval.');
+      setApprovalMessage(err.response?.data?.message || 'Failed to update donation certificate status.');
     }
   };
 
-  const handleVolunteerCertificateDecision = async (applicationId, decision) => {
+  const handleVolunteerDecision = async (applicationId, decision) => {
     try {
       const noteKey = `volunteer-${applicationId}`;
       await reviewVolunteerCertificateRequest(applicationId, {
         decision,
         note: approvalNotes[noteKey] || ''
       });
-      setApprovalMessage(`Volunteer certificate request ${decision === 'approve' ? 'approved' : 'rejected'}.`);
-      loadApprovals();
+      setApprovalMessage(`Volunteer certificate ${decision === 'approve' ? 'approved' : 'rejected'} successfully.`);
+      await Promise.all([loadApprovals(), loadDashboardData()]);
     } catch (err) {
-      setApprovalMessage(err.response?.data?.message || 'Failed to process volunteer approval.');
+      setApprovalMessage(err.response?.data?.message || 'Failed to update volunteer certificate status.');
     }
   };
 
-  const handleRequestStatus = async (id, status) => {
-    try {
-      const res = await updateHelpRequestStatus(id, status);
-      setHelpRequests(prev => prev.map(req => (req.id === id ? res.data : req)));
-      setRequestMessage('Request status updated.');
-    } catch (err) {
-      setRequestMessage('Failed to update request.');
-    }
-  };
+  if (loading) {
+    return <div className="p-6 text-center text-gray-600">Loading NGO dashboard...</div>;
+  }
 
-  if (loading) return <div className="p-6 text-center">Loading...</div>;
-
-  const isVerified = ngo?.verified;
-  const isPending = ngo?.verificationDocs?.length > 0 && !ngo.verified;
-  
   return (
     <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-800">NGO Dashboard</h1>
-          <p className="text-gray-600 mt-1">Welcome, {ngo?.name || user?.name}</p>
+      <div className="max-w-7xl mx-auto space-y-6">
+        <header className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">NGO Dashboard</h1>
+              <p className="text-gray-600 mt-1">{ngo?.name || 'Your NGO workspace'}</p>
+            </div>
+            <div className={`px-3 py-2 rounded-lg text-sm font-semibold ${isVerified ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+              {isVerified ? 'Verified NGO' : 'Verification Pending'}
+            </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="rounded-lg border border-gray-200 p-4">
+              <p className="text-sm text-gray-500">Total Donation Amount</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">{currency(donationSummary.totalCompletedAmount)}</p>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4">
+              <p className="text-sm text-gray-500">Completed Donations</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">{Number(donationSummary.completedCount || 0)}</p>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4">
+              <p className="text-sm text-gray-500">Volunteer Requests</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">{Number(volunteerSummary.totalRequests || 0)}</p>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4">
+              <p className="text-sm text-gray-500">Pending Certificates</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">{pendingCertificateTotal}</p>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4">
+              <p className="text-sm text-gray-500">Unread Messages</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">{messageUnreadCount}</p>
+              <Link to="/messages" className="inline-block mt-2 text-sm text-indigo-600 hover:underline">Open Inbox</Link>
+            </div>
+          </div>
         </header>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-lg shadow p-6 text-center">
-                <p className="text-3xl">📋</p>
-                <h3 className="text-gray-600 mt-2">Profile Status</h3>
-                {isVerified ? (
-                    <p className="text-2xl font-bold text-green-600 mt-2">✅ Verified</p>
-                ) : isPending ? (
-                    <p className="text-2xl font-bold text-yellow-600 mt-2">⏳ Pending</p>
-                ) : (
-                    <p className="text-2xl font-bold text-red-600 mt-2">❌ Incomplete</p>
-                )}
+        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Certificate Approval Queue</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Review completed donations and volunteer activities before certificate issuance.
+              </p>
             </div>
-            <div className="bg-white rounded-lg shadow p-6 text-center">
-                <p className="text-3xl">📢</p>
-                <h3 className="text-gray-600 mt-2">Active Campaigns</h3>
-                <p className="text-2xl font-bold text-green-600 mt-2">{campaigns.length}</p>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6 text-center">
-                <p className="text-3xl">💰</p>
-                <h3 className="text-gray-600 mt-2">Total Donations</h3>
-                <p className="text-2xl font-bold text-purple-600 mt-2">₹{campaignStats.totalDonations.toLocaleString()}</p>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6 text-center">
-                <p className="text-3xl">👥</p>
-                <h3 className="text-gray-600 mt-2">Volunteers</h3>
-                <p className="text-2xl font-bold text-orange-600 mt-2">{campaignStats.volunteerCount}</p>
-            </div>
-        </section>
-
-        <section className="bg-white rounded-lg shadow-lg p-6 mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">🔔 Notifications</h2>
-          {notificationsLoading ? (
-            <p className="text-gray-600">Loading notifications...</p>
-          ) : notifications.length === 0 ? (
-            <p className="text-gray-500">No notifications yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {notifications.slice(0, 5).map(note => (
-                <div key={note.id} className="border rounded-md p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-gray-800">{note.title}</p>
-                    <span className="text-xs text-gray-500">{new Date(note.createdAt).toLocaleString()}</span>
-                  </div>
-                  <p className="text-sm text-gray-700 mt-1">{note.message}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="bg-white rounded-lg shadow-lg p-8 mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">📥 Support Requests</h2>
-          <p className="text-gray-600 mb-4">Review beneficiary requests and update their status.</p>
-          {requestMessage && (
-            <div className="mb-4 p-3 rounded bg-blue-50 border border-blue-200 text-blue-800">{requestMessage}</div>
-          )}
-          {helpRequests.length === 0 ? (
-            <p className="text-gray-500">No requests received yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {helpRequests.map(req => (
-                <div key={req.id} className="border rounded-lg p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                  <div>
-                    <p className="font-semibold text-gray-800">{req.name}</p>
-                    <p className="text-sm text-gray-500">
-                      {req.helpType} • {req.location || 'Location not specified'} • Age: {req.age || 'N/A'}
-                    </p>
-                    <p className="text-xs text-gray-400">Mobile: {req.mobileNumber}</p>
-                    {req.description && <p className="text-sm text-gray-600 mt-2">{req.description}</p>}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <select
-                      value={req.status}
-                      onChange={(e) => handleRequestStatus(req.id, e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg"
-                    >
-                      {['Pending', 'Approved', 'In Progress', 'Completed', 'Rejected'].map(status => (
-                        <option key={status} value={status}>{status}</option>
-                      ))}
-                    </select>
-                    <span className="text-xs text-gray-400">Submitted: {new Date(req.createdAt).toLocaleString()}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="bg-white rounded-lg shadow-lg p-8 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-800">✅ Certificate Approvals</h2>
             <button
               type="button"
               onClick={loadApprovals}
-              className="px-3 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+              className="px-3 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
             >
-              Refresh
+              Refresh Queue
             </button>
           </div>
-          <p className="text-gray-600 mb-4">Approve or reject certificate requests for donations and completed volunteer work.</p>
-          {approvalMessage && (
-            <div className="mb-4 p-3 rounded bg-blue-50 border border-blue-200 text-blue-800">{approvalMessage}</div>
-          )}
-          {approvalLoading ? (
-            <p className="text-gray-600">Loading certificate requests...</p>
-          ) : (
-            <div className="space-y-8">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">Donation Certificate Requests</h3>
-                {donationApprovals.length === 0 ? (
-                  <p className="text-gray-500">No pending donation certificate approvals.</p>
-                ) : (
-                  <div className="space-y-4">
-                    {donationApprovals.map(donation => {
-                      const noteKey = `donation-${donation.id}`;
-                      return (
-                        <div key={donation.id} className="border rounded-lg p-4">
-                          <p className="font-semibold text-gray-800">{donation.user?.name || 'Donor'} • ₹{Number(donation.amount || 0).toLocaleString('en-IN')}</p>
-                          <p className="text-sm text-gray-600">{donation.campaign?.title || 'Campaign'}</p>
-                          <p className="text-xs text-gray-500 mt-1">Requested: {new Date(donation.certificateApprovalRequestedAt || donation.createdAt).toLocaleString()}</p>
-                          <textarea
-                            value={approvalNotes[noteKey] || ''}
-                            onChange={(e) => handleApprovalNoteChange(noteKey, e.target.value)}
-                            placeholder="Optional note"
-                            className="mt-3 w-full border border-gray-300 rounded-md p-2 text-sm"
-                            rows={2}
-                          />
-                          <div className="mt-3 flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleDonationCertificateDecision(donation.id, 'approve')}
-                              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                            >
-                              Approve & Issue
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDonationCertificateDecision(donation.id, 'reject')}
-                              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
 
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">Volunteer Certificate Requests</h3>
-                {volunteerApprovals.length === 0 ? (
-                  <p className="text-gray-500">No pending volunteer certificate approvals.</p>
-                ) : (
-                  <div className="space-y-4">
-                    {volunteerApprovals.map(application => {
-                      const noteKey = `volunteer-${application.id}`;
-                      return (
-                        <div key={application.id} className="border rounded-lg p-4">
-                          <p className="font-semibold text-gray-800">{application.user?.name || application.fullName || 'Volunteer'}</p>
-                          <p className="text-sm text-gray-600">{application.opportunity?.title || 'Volunteer Opportunity'}</p>
-                          <p className="text-xs text-gray-500 mt-1">Completed: {application.completedAt ? new Date(application.completedAt).toLocaleString() : 'N/A'}</p>
-                          {application.assignedTask && (
-                            <p className="text-xs text-gray-600 mt-1">Task: {application.assignedTask}</p>
-                          )}
-                          <textarea
-                            value={approvalNotes[noteKey] || ''}
-                            onChange={(e) => handleApprovalNoteChange(noteKey, e.target.value)}
-                            placeholder="Optional note"
-                            className="mt-3 w-full border border-gray-300 rounded-md p-2 text-sm"
-                            rows={2}
-                          />
-                          <div className="mt-3 flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleVolunteerCertificateDecision(application.id, 'approve')}
-                              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                            >
-                              Approve & Issue
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleVolunteerCertificateDecision(application.id, 'reject')}
-                              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 bg-white rounded-lg shadow-lg p-8">
-                <h2 className="text-2xl font-bold text-gray-800 mb-6">🎯 Quick Actions</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Link to="/ngo/profile" className="block p-6 bg-blue-50 rounded-lg border border-blue-200 hover:shadow-md transition">
-                        <h3 className="font-semibold text-blue-800">Update Your Profile</h3>
-                        <p className="text-sm text-blue-600 mt-1">Keep your NGO's information up-to-date.</p>
-                    </Link>
-                    <Link to="/campaigns" className="block p-6 bg-orange-50 rounded-lg border border-orange-200 hover:shadow-md transition">
-                        <h3 className="font-semibold text-orange-800">View Campaigns</h3>
-                        <p className="text-sm text-orange-600 mt-1">See your active campaigns and progress.</p>
-                    </Link>
-                    <Link to="/campaigns/create" className="block p-6 bg-green-50 rounded-lg border border-green-200 hover:shadow-md transition">
-                        <h3 className="font-semibold text-green-800">Create New Campaign</h3>
-                        <p className="text-sm text-green-600 mt-1">Launch a funding, volunteering, or hybrid campaign.</p>
-                    </Link>
-                    <Link to="/messages" className="block p-6 bg-purple-50 rounded-lg border border-purple-200 hover:shadow-md transition">
-                        <h3 className="font-semibold text-purple-800">View Messages</h3>
-                        <p className="text-sm text-purple-600 mt-1">Check inquiries from users.</p>
-                    </Link>
-                </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-lg p-8">
-                <h2 className="text-2xl font-bold text-gray-800 mb-6">📋 Verification Status</h2>
-                <div className="space-y-4">
-                    <div className={`p-4 rounded-lg ${isVerified ? 'bg-green-100' : isPending ? 'bg-yellow-100' : 'bg-red-100'}`}>
-                        <h3 className={`font-semibold ${isVerified ? 'text-green-800' : isPending ? 'text-yellow-800' : 'text-red-800'}`}>
-                            {isVerified ? 'Your NGO is Verified' : isPending ? 'Verification Pending' : 'Verification Incomplete'}
-                        </h3>
-                        <p className={`text-sm ${isVerified ? 'text-green-700' : isPending ? 'text-yellow-700' : 'text-red-700'}`}>
-                            {isVerified 
-                                ? "Congratulations! Your NGO is visible to all users."
-                                : isPending 
-                                    ? "Your documents are under review. This usually takes 24-48 hours." 
-                                    : "Please complete your profile and submit verification documents."
-                            }
-                        </p>
-                    </div>
-                    {!isVerified && (
-                        <Link to="/ngo/profile" className="block w-full text-center mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
-                            {isPending ? 'Check Status' : 'Submit Documents'}
-                        </Link>
-                    )}
-                </div>
-            </div>
-        </section>
-
-        {/* Volunteer Campaigns Section */}
-        <section className="mt-8 bg-white rounded-lg shadow-lg p-8">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">🤝 Volunteer Needs in Your Campaigns</h2>
-            <Link 
-              to="/campaigns/create"
-              className="px-4 py-2 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition-colors"
-            >
-              + Create Campaign
-            </Link>
+          <div className="mt-4 p-4 rounded-lg border border-blue-100 bg-blue-50 text-blue-900 text-sm">
+            <p className="font-semibold">Approval Guidelines</p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              <li>Approve only after verifying donor/volunteer details and campaign activity.</li>
+              <li>Use reject with a clear note so users understand what needs correction.</li>
+              <li>Approved requests issue certificates immediately and status is saved permanently.</li>
+            </ul>
           </div>
-          
-          {campaigns.filter(c => c.volunteersNeeded && c.volunteersNeeded.length > 0).length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {campaigns.filter(c => c.volunteersNeeded && c.volunteersNeeded.length > 0).map(campaign => (
-                <div key={campaign.id} className="border rounded-lg p-4 hover:shadow-lg">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-lg">{campaign.title}</h3>
-                    <Link to={`/campaigns/${campaign.id}`} className="text-indigo-600 text-sm hover:underline">
-                      View
-                    </Link>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-3">{campaign.description?.substring(0,150) || ''}...</p>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {campaign.volunteersNeeded?.slice(0, 4).map((role, i) => (
-                      <span key={i} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">{role}</span>
-                    ))}
-                  </div>
-                  <div className="flex justify-between text-sm text-gray-500">
-                    <span>{campaign.location || 'Location TBD'}</span>
-                    <span>{campaign.volunteers?.length || 0} joined</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <p className="mb-4">No volunteer campaigns yet.</p>
-              <Link 
-                to="/campaigns/create"
-                className="px-4 py-2 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition-colors inline-block"
-              >
-                Create Your First Campaign
-              </Link>
+
+          {approvalMessage && (
+            <div className="mt-4 p-3 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-800 text-sm">
+              {approvalMessage}
             </div>
           )}
+
+          {approvalLoading ? (
+            <p className="mt-4 text-gray-600">Loading approvals...</p>
+          ) : (
+            <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Donation Certificates</h3>
+                {donationApprovals.length === 0 ? (
+                  <p className="text-sm text-gray-500">No pending donation approvals.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {donationApprovals.map((item) => {
+                      const noteKey = `donation-${item.id}`;
+                      return (
+                        <div key={item.id} className="border border-gray-200 rounded-lg p-4">
+                          <p className="font-semibold text-gray-900">{item.user?.name || item.donorName || 'Donor'}</p>
+                          <p className="text-sm text-gray-600">{item.user?.email || item.donorEmail || 'No email'}</p>
+                          <p className="text-sm text-gray-600 mt-1">Campaign: {item.campaign?.title || 'Campaign'}</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-1">Amount: {currency(item.amount)}</p>
+                          <p className="text-xs text-gray-500 mt-1">Requested: {when(item.certificateApprovalRequestedAt || item.createdAt)}</p>
+
+                          <textarea
+                            rows={2}
+                            value={approvalNotes[noteKey] || ''}
+                            onChange={(e) => handleApprovalNoteChange(noteKey, e.target.value)}
+                            placeholder="Optional note for the donor"
+                            className="mt-3 w-full border border-gray-300 rounded-md p-2 text-sm"
+                          />
+
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleDonationDecision(item.id, 'approve')}
+                              className="px-3 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDonationDecision(item.id, 'reject')}
+                              className="px-3 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Volunteer Certificates</h3>
+                {volunteerApprovals.length === 0 ? (
+                  <p className="text-sm text-gray-500">No pending volunteer approvals.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {volunteerApprovals.map((item) => {
+                      const noteKey = `volunteer-${item.id}`;
+                      return (
+                        <div key={item.id} className="border border-gray-200 rounded-lg p-4">
+                          <p className="font-semibold text-gray-900">{item.user?.name || item.fullName || 'Volunteer'}</p>
+                          <p className="text-sm text-gray-600">{item.user?.email || item.email || 'No email'}</p>
+                          <p className="text-sm text-gray-600 mt-1">Opportunity: {item.opportunity?.title || 'Opportunity'}</p>
+                          <p className="text-sm text-gray-600 mt-1">Status: {item.status || 'assigned'}</p>
+                          <p className="text-xs text-gray-500 mt-1">Completed: {when(item.completedAt)}</p>
+
+                          <textarea
+                            rows={2}
+                            value={approvalNotes[noteKey] || ''}
+                            onChange={(e) => handleApprovalNoteChange(noteKey, e.target.value)}
+                            placeholder="Optional note for the volunteer"
+                            className="mt-3 w-full border border-gray-300 rounded-md p-2 text-sm"
+                          />
+
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleVolunteerDecision(item.id, 'approve')}
+                              className="px-3 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleVolunteerDecision(item.id, 'reject')}
+                              className="px-3 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-2xl font-bold text-gray-900">Donation Transactions</h2>
+            <span className="text-sm text-gray-500">{donationTransactions.length} recent records</span>
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-gray-700">
+                <tr>
+                  <th className="text-left px-3 py-2">Date</th>
+                  <th className="text-left px-3 py-2">Donor</th>
+                  <th className="text-left px-3 py-2">Campaign</th>
+                  <th className="text-left px-3 py-2">Amount</th>
+                  <th className="text-left px-3 py-2">Status</th>
+                  <th className="text-left px-3 py-2">Certificate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {donationTransactions.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-gray-500">No donation transactions found.</td>
+                  </tr>
+                ) : (
+                  donationTransactions.map((item) => (
+                    <tr key={item.id} className="border-t border-gray-100">
+                      <td className="px-3 py-2 text-gray-700">{when(item.paymentVerifiedAt || item.createdAt)}</td>
+                      <td className="px-3 py-2 text-gray-800">
+                        <p className="font-medium">{item.user?.name || item.donorName || 'Donor'}</p>
+                        <p className="text-xs text-gray-500">{item.user?.email || item.donorEmail || 'No email'}</p>
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">{item.campaign?.title || 'Campaign'}</td>
+                      <td className="px-3 py-2 font-semibold text-gray-900">{currency(item.amount)}</td>
+                      <td className="px-3 py-2 text-gray-700">{item.status || 'pending'}</td>
+                      <td className="px-3 py-2 text-gray-700">{item.certificateApprovalStatus || 'not_requested'}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-2xl font-bold text-gray-900">Volunteer Requests</h2>
+            <div className="text-sm text-gray-600 flex items-center gap-3">
+              <span>Applied: {volunteerSummary.appliedCount}</span>
+              <span>Assigned: {volunteerSummary.assignedCount}</span>
+              <span>Completed: {volunteerSummary.completedCount}</span>
+            </div>
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-gray-700">
+                <tr>
+                  <th className="text-left px-3 py-2">Volunteer</th>
+                  <th className="text-left px-3 py-2">Opportunity</th>
+                  <th className="text-left px-3 py-2">Submitted</th>
+                  <th className="text-left px-3 py-2">Status</th>
+                  <th className="text-left px-3 py-2">Certificate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {volunteerRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-6 text-center text-gray-500">No volunteer requests found.</td>
+                  </tr>
+                ) : (
+                  volunteerRequests.map((item) => (
+                    <tr key={item.id} className="border-t border-gray-100">
+                      <td className="px-3 py-2 text-gray-800">
+                        <p className="font-medium">{item.user?.name || item.fullName || 'Volunteer'}</p>
+                        <p className="text-xs text-gray-500">{item.user?.email || item.email || 'No email'}</p>
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">{item.opportunity?.title || 'Opportunity'}</td>
+                      <td className="px-3 py-2 text-gray-700">{when(item.appliedAt || item.createdAt)}</td>
+                      <td className="px-3 py-2 text-gray-700">{item.status || 'applied'}</td>
+                      <td className="px-3 py-2 text-gray-700">{item.certificateApprovalStatus || 'not_requested'}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <Link to="/campaigns/create" className="px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 font-medium text-gray-800">Create Campaign</Link>
+            <Link to="/campaigns" className="px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 font-medium text-gray-800">View Campaigns</Link>
+            <Link to="/ngo/profile" className="px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 font-medium text-gray-800">Update Profile</Link>
+            <Link to="/messages" className="px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 font-medium text-gray-800">Open Messages</Link>
+          </div>
         </section>
       </div>
     </div>

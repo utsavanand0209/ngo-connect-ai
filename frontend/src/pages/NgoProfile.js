@@ -425,14 +425,24 @@ export default function NgoProfile() {
                   ))}
                 </div>
                 <p className="mt-3 text-sm text-gray-600">{locationText}</p>
-                <button
-                  type="button"
-                  onClick={openDirections}
-                  disabled={directionsLoading}
-                  className="mt-4 px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:bg-indigo-300"
-                >
-                  {directionsLoading ? 'Opening Directions...' : 'Get Directions'}
-                </button>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={openDirections}
+                    disabled={directionsLoading}
+                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:bg-indigo-300"
+                  >
+                    {directionsLoading ? 'Opening Directions...' : 'Get Directions'}
+                  </button>
+                  {isAuthenticated && isUser && (
+                    <Link
+                      to={`/messages?ngo=${id}`}
+                      className="px-4 py-2 rounded-lg border border-indigo-200 text-indigo-700 font-semibold hover:bg-indigo-50"
+                    >
+                      Message This NGO
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -230,6 +230,106 @@ router.get('/approvals/ngo/pending', auth(['ngo']), async (req, res) => {
   }
 });
 
+// NGO volunteer requests + summary
+router.get('/ngo/requests', auth(['ngo']), async (req, res) => {
+  try {
+    const ngoId = req.user.id;
+    const limit = Math.min(Math.max(Number(req.query.limit) || 40, 1), 150);
+
+    const {
+      rows: [summaryRow = {}]
+    } = await query(
+      `
+      SELECT
+        COUNT(*) AS total_count,
+        COUNT(*) FILTER (
+          WHERE COALESCE(NULLIF(source_doc->>'status', ''), 'applied') = 'applied'
+        ) AS applied_count,
+        COUNT(*) FILTER (
+          WHERE COALESCE(NULLIF(source_doc->>'status', ''), 'applied') = 'assigned'
+        ) AS assigned_count,
+        COUNT(*) FILTER (
+          WHERE COALESCE(NULLIF(source_doc->>'status', ''), 'applied') = 'completed'
+        ) AS completed_count,
+        COUNT(*) FILTER (
+          WHERE COALESCE(NULLIF(source_doc->>'status', ''), 'applied') = 'withdrawn'
+        ) AS withdrawn_count,
+        COUNT(*) FILTER (
+          WHERE COALESCE(NULLIF(source_doc->>'status', ''), 'applied') = 'completed'
+            AND COALESCE(NULLIF(source_doc->>'certificateApprovalStatus', ''), 'not_requested') = 'pending'
+        ) AS pending_certificate_count
+      FROM volunteer_applications_rel
+      WHERE source_doc->>'ngo' = $1
+      `,
+      [ngoId]
+    );
+
+    const { rows } = await query(
+      `
+      SELECT
+        va.external_id AS application_id,
+        va.source_doc AS application_doc,
+        u.external_id AS user_id,
+        u.source_doc AS user_doc,
+        vo.external_id AS opportunity_id,
+        vo.source_doc AS opportunity_doc
+      FROM volunteer_applications_rel va
+      LEFT JOIN users_rel u ON u.external_id = NULLIF(va.source_doc->>'user', '')
+      LEFT JOIN volunteer_opportunities_rel vo ON vo.external_id = NULLIF(va.source_doc->>'opportunity', '')
+      WHERE va.source_doc->>'ngo' = $1
+      ORDER BY va.created_at DESC
+      LIMIT $2
+      `,
+      [ngoId, limit]
+    );
+
+    const requests = rows.map((row) => {
+      const application = toDoc(row, 'application_id', 'application_doc');
+
+      if (row.user_doc) {
+        const user = toDoc(row, 'user_id', 'user_doc');
+        application.user = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          mobileNumber: user.mobileNumber
+        };
+      } else {
+        application.user = null;
+      }
+
+      if (row.opportunity_doc) {
+        const opportunity = toDoc(row, 'opportunity_id', 'opportunity_doc');
+        application.opportunity = {
+          id: opportunity.id,
+          title: opportunity.title,
+          location: opportunity.location,
+          commitment: opportunity.commitment
+        };
+      } else {
+        application.opportunity = null;
+      }
+
+      return application;
+    });
+
+    res.json({
+      summary: {
+        totalRequests: Number(summaryRow.total_count || 0),
+        appliedCount: Number(summaryRow.applied_count || 0),
+        assignedCount: Number(summaryRow.assigned_count || 0),
+        completedCount: Number(summaryRow.completed_count || 0),
+        withdrawnCount: Number(summaryRow.withdrawn_count || 0),
+        pendingCertificateCount: Number(summaryRow.pending_certificate_count || 0)
+      },
+      requests
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Get opportunities posted by an NGO
 router.get('/ngo/:id', async (req, res) => {
   try {

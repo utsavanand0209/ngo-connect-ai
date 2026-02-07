@@ -6,7 +6,10 @@ module.exports = createModel({
   docColumn: 'source_doc',
   externalIdColumn: 'external_id',
   refs: {
-    from: 'User',
-    toNGO: 'NGO'
+    fromUser: 'User',
+    fromNGO: 'NGO',
+    toUser: 'User',
+    toNGO: 'NGO',
+    from: 'User'
   }
 });

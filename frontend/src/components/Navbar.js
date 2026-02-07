@@ -60,6 +60,9 @@ export default function Navbar() {
               {userRole === 'user' && (
                 <Link to="/insights" className="text-gray-600 hover:text-gray-900 transition-colors">Insights</Link>
               )}
+              {isAuthenticated && (userRole === 'user' || userRole === 'ngo') && (
+                <Link to="/messages" className="text-gray-600 hover:text-gray-900 transition-colors">Messages</Link>
+              )}
               {isAuthenticated && userRole === 'ngo' && (
                 <Link to="/ngo/profile" className="text-gray-600 hover:text-gray-900 transition-colors">
                   My NGO Profile
@@ -129,6 +132,9 @@ export default function Navbar() {
             <Link to="/chatbot" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Chatbot</Link>
             {userRole === 'user' && (
               <Link to="/insights" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Insights</Link>
+            )}
+            {isAuthenticated && (userRole === 'user' || userRole === 'ngo') && (
+              <Link to="/messages" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Messages</Link>
             )}
             {isAuthenticated && userRole === 'ngo' && (
               <Link to="/ngo/profile" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">

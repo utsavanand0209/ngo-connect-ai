@@ -15,6 +15,7 @@ const {
   createPaymentOrder,
   verifyPayment
 } = require('../services/paymentGateway');
+const { query } = require('../db/postgres');
 
 const RECEIPT_PREFIX = 'RCP';
 
@@ -278,6 +279,108 @@ const mapReceiptPayload = (donation) => ({
       donation.paymentMeta?.netbankingBank ? `Bank: ${donation.paymentMeta.netbankingBank}` : null,
       donation.message ? `Message: ${donation.message}` : null
     ].filter(Boolean)
+  }
+});
+
+const mapRowDoc = (row, idField, docField) => {
+  const doc = row?.[docField] && typeof row[docField] === 'object' ? { ...row[docField] } : {};
+  if (!doc.id) doc.id = row?.[idField];
+  return doc;
+};
+
+// NGO donation transactions + summary
+router.get('/ngo/transactions', auth(['ngo']), async (req, res) => {
+  try {
+    const ngoId = req.user.id;
+    const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100);
+
+    const {
+      rows: [summaryRow = {}]
+    } = await query(
+      `
+      SELECT
+        COUNT(*) FILTER (
+          WHERE COALESCE(NULLIF(source_doc->>'status', ''), 'pending') = 'completed'
+        ) AS completed_count,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN COALESCE(NULLIF(source_doc->>'status', ''), 'pending') = 'completed'
+                THEN COALESCE(safe_numeric(source_doc->>'amount'), 0)
+              ELSE 0
+            END
+          ),
+          0
+        ) AS total_completed_amount,
+        COUNT(*) FILTER (
+          WHERE COALESCE(NULLIF(source_doc->>'status', ''), 'pending') = 'completed'
+            AND COALESCE(NULLIF(source_doc->>'certificateApprovalStatus', ''), 'not_requested') = 'pending'
+        ) AS pending_certificate_count
+      FROM donations_rel
+      WHERE source_doc->>'ngo' = $1
+      `,
+      [ngoId]
+    );
+
+    const { rows } = await query(
+      `
+      SELECT
+        d.external_id AS donation_id,
+        d.source_doc AS donation_doc,
+        u.external_id AS user_id,
+        u.source_doc AS user_doc,
+        c.external_id AS campaign_id,
+        c.source_doc AS campaign_doc
+      FROM donations_rel d
+      LEFT JOIN users_rel u ON u.external_id = NULLIF(d.source_doc->>'user', '')
+      LEFT JOIN campaigns_rel c ON c.external_id = NULLIF(d.source_doc->>'campaign', '')
+      WHERE d.source_doc->>'ngo' = $1
+      ORDER BY d.created_at DESC
+      LIMIT $2
+      `,
+      [ngoId, limit]
+    );
+
+    const transactions = rows.map((row) => {
+      const donation = mapRowDoc(row, 'donation_id', 'donation_doc');
+      if (row.user_doc) {
+        const user = mapRowDoc(row, 'user_id', 'user_doc');
+        donation.user = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          mobileNumber: user.mobileNumber
+        };
+      } else {
+        donation.user = null;
+      }
+
+      if (row.campaign_doc) {
+        const campaign = mapRowDoc(row, 'campaign_id', 'campaign_doc');
+        donation.campaign = {
+          id: campaign.id,
+          title: campaign.title,
+          category: campaign.category,
+          location: campaign.location
+        };
+      } else {
+        donation.campaign = null;
+      }
+
+      return donation;
+    });
+
+    res.json({
+      summary: {
+        completedCount: Number(summaryRow.completed_count || 0),
+        totalCompletedAmount: Number(summaryRow.total_completed_amount || 0),
+        pendingCertificateCount: Number(summaryRow.pending_certificate_count || 0)
+      },
+      transactions
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
