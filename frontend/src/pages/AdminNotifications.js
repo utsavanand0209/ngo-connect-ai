@@ -106,7 +106,7 @@ export default function AdminNotifications() {
           <div className="space-y-3">
             {notifications.length === 0 && <div className="text-gray-500">No notifications sent yet.</div>}
             {notifications.map(note => (
-              <div key={note._id} className="border rounded-md p-3">
+              <div key={note.id} className="border rounded-md p-3">
                 <div className="flex items-center justify-between">
                   <p className="font-semibold text-gray-800">{note.title}</p>
                   <span className="text-xs text-gray-500">{new Date(note.createdAt).toLocaleString()}</span>

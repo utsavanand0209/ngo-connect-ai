@@ -2,16 +2,23 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SparklesIcon, LocationMarkerIcon, HeartIcon, UserGroupIcon } from '@heroicons/react/outline';
 import { getAIRecommendations, getUserPreferences } from '../services/api';
+import { getUserRole } from '../utils/auth';
 
 export default function Recommendations() {
   const [recommendations, setRecommendations] = useState({ ngos: [], campaigns: [] });
   const [preferences, setPreferences] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
+  const role = getUserRole();
+  const isUser = role === 'user';
 
   useEffect(() => {
+    if (!isUser) {
+      setLoading(false);
+      return;
+    }
     fetchData();
-  }, []);
+  }, [isUser]);
 
   const fetchData = async () => {
     try {
@@ -38,7 +45,7 @@ export default function Recommendations() {
   const renderNGOCard = (item) => {
     const ngo = item.ngo;
     return (
-      <div key={ngo._id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border border-gray-100">
+      <div key={ngo.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border border-gray-100">
         <div className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -51,7 +58,9 @@ export default function Recommendations() {
               )}
               <div>
                 <h3 className="font-bold text-lg text-gray-800">{ngo.name}</h3>
-                <p className="text-sm text-gray-500">{ngo.category || 'NGO'}</p>
+                <p className="text-sm text-gray-500">
+                  {(ngo.categories && ngo.categories.length > 0 ? ngo.categories : [ngo.category].filter(Boolean)).join(', ') || 'NGO'}
+                </p>
               </div>
             </div>
             <div className="flex flex-col items-end">
@@ -90,18 +99,24 @@ export default function Recommendations() {
 
           <div className="flex items-center gap-1 text-sm text-gray-500 mb-4">
             <LocationMarkerIcon className="w-4 h-4" />
-            <span>{ngo.location || 'Location not specified'}</span>
+            <span>
+            {
+              ngo.location && typeof ngo.location === 'object' && ngo.location.type === 'Point' && Array.isArray(ngo.location.coordinates)
+                ? `Coordinates: ${ngo.location.coordinates.join(', ')}`
+                : ngo.location || 'Location not specified'
+            }
+            </span>
           </div>
 
           <div className="flex gap-2">
             <Link 
-              to={`/ngos/${ngo._id}`}
+              to={`/ngos/${ngo.id}`}
               className="flex-1 text-center py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition"
             >
               View Profile
             </Link>
             <Link 
-              to={`/ngos/${ngo._id}#campaigns`}
+              to={`/ngos/${ngo.id}#campaigns`}
               className="flex-1 text-center py-2 border border-indigo-600 text-indigo-600 rounded-lg font-medium hover:bg-indigo-50 transition"
             >
               See Campaigns
@@ -126,7 +141,7 @@ export default function Recommendations() {
         : 'Donate Now';
     
     return (
-      <div key={campaign._id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border border-gray-100">
+      <div key={campaign.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border border-gray-100">
         <div className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -202,13 +217,13 @@ export default function Recommendations() {
 
           <div className="flex gap-2">
             <Link 
-              to={`/campaigns/${campaign._id}`}
+              to={`/campaigns/${campaign.id}`}
               className="flex-1 text-center py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition"
             >
               {actionLabel}
             </Link>
             <Link 
-              to={`/campaigns/${campaign._id}`}
+              to={`/campaigns/${campaign.id}`}
               className="flex-1 text-center py-2 border border-green-600 text-green-600 rounded-lg font-medium hover:bg-green-50 transition"
             >
               Learn More
@@ -225,6 +240,25 @@ export default function Recommendations() {
         <div className="text-center">
           <div className="animate-spin w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full mx-auto mb-4"></div>
           <p className="text-gray-600">Finding your perfect matches...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isUser) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow p-8 text-center max-w-lg">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">User accounts only</h2>
+          <p className="text-gray-600 mb-4">
+            Personalized recommendations are available for beneficiaries. Please login as a user to view them.
+          </p>
+          <Link
+            to="/dashboard"
+            className="inline-block px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition"
+          >
+            Back to Dashboard
+          </Link>
         </div>
       </div>
     );

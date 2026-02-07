@@ -7,7 +7,9 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import UserProfile from './pages/UserProfile';
 import DiscoverNgo from './pages/DiscoverNgo';
+import NgoMap from './pages/Map/NgoMap';
 import VolunteerCampaigns from './pages/VolunteerCampaigns';
+import VolunteerOpportunities from './pages/VolunteerOpportunities';
 import Donate from './pages/Donate';
 import SmartInsights from './pages/SmartInsights';
 import NgoList from './pages/NgoList';
@@ -27,7 +29,10 @@ import AdminVerifications from './pages/AdminVerifications';
 import AdminUsers from './pages/AdminUsers';
 import AdminAnalytics from './pages/AdminAnalytics';
 import AdminNotifications from './pages/AdminNotifications';
+import AdminRequests from './pages/AdminRequests';
+import AdminCategories from './pages/AdminCategories';
 import AdminRoute from './components/AdminRoute';
+import UserRoute from './components/UserRoute';
 
 export default function App() {
   return (
@@ -38,9 +43,11 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/discover" element={<ProtectedRoute><DiscoverNgo /></ProtectedRoute>} />
-        <Route path="/volunteer-campaigns" element={<ProtectedRoute><VolunteerCampaigns /></ProtectedRoute>} />
-        <Route path="/donate" element={<ProtectedRoute><Donate /></ProtectedRoute>} />
-        <Route path="/insights" element={<ProtectedRoute><SmartInsights /></ProtectedRoute>} />
+        <Route path="/map" element={<ProtectedRoute><NgoMap /></ProtectedRoute>} />
+        <Route path="/volunteer-campaigns" element={<UserRoute><VolunteerCampaigns /></UserRoute>} />
+        <Route path="/volunteer-opportunities" element={<UserRoute><VolunteerOpportunities /></UserRoute>} />
+        <Route path="/donate" element={<UserRoute><Donate /></UserRoute>} />
+        <Route path="/insights" element={<UserRoute><SmartInsights /></UserRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
         <Route path="/ngo/profile" element={<ProtectedRoute><NgoProfileUpdate /></ProtectedRoute>} />
@@ -51,16 +58,18 @@ export default function App() {
         <Route path="/campaigns" element={<CampaignList />} />
         <Route path="/campaigns/:id" element={<CampaignDetails />} />
         <Route path="/campaigns/create" element={<ProtectedRoute><CreateCampaign /></ProtectedRoute>} />
-        <Route path="/volunteer" element={<Navigate to="/campaigns" replace />} />
+        <Route path="/volunteer" element={<Navigate to="/volunteer-opportunities" replace />} />
         <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
         <Route path="/chatbot" element={<Chatbot />} />
-        <Route path="/recommendations" element={<ProtectedRoute><Recommendations /></ProtectedRoute>} />
+        <Route path="/recommendations" element={<UserRoute><Recommendations /></UserRoute>} />
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/verifications" element={<AdminRoute><AdminVerifications /></AdminRoute>} />
         <Route path="/admin/flagged-content" element={<AdminRoute><FlaggedContent /></AdminRoute>} />
         <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
         <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
         <Route path="/admin/notifications" element={<AdminRoute><AdminNotifications /></AdminRoute>} />
+        <Route path="/admin/requests" element={<AdminRoute><AdminRequests /></AdminRoute>} />
+        <Route path="/admin/categories" element={<AdminRoute><AdminCategories /></AdminRoute>} />
       </Routes>
     </BrowserRouter>
   );

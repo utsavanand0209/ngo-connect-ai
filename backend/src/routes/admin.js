@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const Donation = require('../models/Donation');
 const FlagRequest = require('../models/FlagRequest');
+const HelpRequest = require('../models/HelpRequest');
 const auth = require('../middleware/auth');
 
 // Only admin
@@ -27,6 +28,32 @@ router.post('/reject-ngo/:id', auth(['admin']), async (req, res) => {
 router.delete('/user/:id', auth(['admin']), async (req, res) => {
   await User.findByIdAndDelete(req.params.id);
   res.json({ message: 'User deleted' });
+});
+
+// List all NGOs (admin)
+router.get('/ngos', auth(['admin']), async (req, res) => {
+  try {
+    const ngos = await NGO.find().sort({ createdAt: -1 });
+    res.json(ngos);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Enable/disable NGO
+router.put('/ngos/:id/active', auth(['admin']), async (req, res) => {
+  try {
+    const { isActive } = req.body;
+    const ngo = await NGO.findByIdAndUpdate(
+      req.params.id,
+      { isActive: typeof isActive === 'boolean' ? isActive : true },
+      { new: true }
+    );
+    if (!ngo) return res.status(404).json({ message: 'NGO not found' });
+    res.json(ngo);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 // Flagged content (admin)
@@ -98,9 +125,15 @@ router.put('/flag-requests/:id/approve', auth(['admin']), async (req, res) => {
     }
 
     if (request.targetType === 'ngo') {
-      await NGO.findByIdAndUpdate(request.targetId, { flagged: true, flagReason: request.reason || 'Flagged by admin' });
+      await NGO.findByIdAndUpdate(request.targetId, {
+        flagged: true,
+        flagReason: request.reason || 'Flagged by admin'
+      });
     } else if (request.targetType === 'campaign') {
-      await Campaign.findByIdAndUpdate(request.targetId, { flagged: true, flagReason: request.reason || 'Flagged by admin' });
+      await Campaign.findByIdAndUpdate(request.targetId, {
+        flagged: true,
+        flagReason: request.reason || 'Flagged by admin'
+      });
     }
 
     request.status = 'approved';
@@ -163,9 +196,28 @@ router.post('/notifications', auth(['admin']), async (req, res) => {
   }
 });
 
+// Help requests (admin)
+router.get('/requests', auth(['admin']), async (req, res) => {
+  try {
+    const requests = await HelpRequest.find()
+      .populate('ngo', 'name helplineNumber location')
+      .populate('user', 'name email mobileNumber')
+      .sort({ createdAt: -1 });
+    res.json(requests);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Analytics (admin)
 router.get('/analytics', auth(['admin']), async (req, res) => {
   try {
+    const toYearMonth = (value) => {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return null;
+      return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+    };
+
     const [
       usersCount,
       verifiedNgosCount,
@@ -173,11 +225,9 @@ router.get('/analytics', auth(['admin']), async (req, res) => {
       campaignsCount,
       flaggedNgosCount,
       flaggedCampaignsCount,
-      usersByMonth,
-      usersByRole,
-      donationsByMonth,
-      volunteerTotals,
-      volunteersByCampaign
+      users,
+      donations,
+      campaigns
     ] = await Promise.all([
       User.countDocuments({}),
       NGO.countDocuments({ verified: true }),
@@ -185,31 +235,51 @@ router.get('/analytics', auth(['admin']), async (req, res) => {
       Campaign.countDocuments({}),
       NGO.countDocuments({ flagged: true }),
       Campaign.countDocuments({ flagged: true }),
-      User.aggregate([
-        { $group: { _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } }, count: { $sum: 1 } } },
-        { $sort: { _id: 1 } }
-      ]),
-      User.aggregate([
-        { $group: { _id: '$role', count: { $sum: 1 } } }
-      ]),
-      Donation.aggregate([
-        { $group: { _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } }, total: { $sum: '$amount' } } },
-        { $sort: { _id: 1 } }
-      ]),
-      Campaign.aggregate([
-        { $project: { count: { $size: { $ifNull: ['$volunteers', []] } } } },
-        { $group: { _id: null, total: { $sum: '$count' } } }
-      ]),
-      Campaign.aggregate([
-        { $project: { title: 1, volunteerCount: { $size: { $ifNull: ['$volunteers', []] } } } },
-        { $sort: { volunteerCount: -1 } },
-        { $limit: 5 }
-      ])
+      User.find({}),
+      Donation.find({}),
+      Campaign.find({})
     ]);
 
+    const usersByMonthMap = new Map();
+    const usersByRole = { admin: 0, ngo: 0, user: 0 };
+    for (const user of users) {
+      const monthKey = toYearMonth(user.createdAt);
+      if (monthKey) {
+        usersByMonthMap.set(monthKey, (usersByMonthMap.get(monthKey) || 0) + 1);
+      }
+      const role = typeof user.role === 'string' ? user.role : 'user';
+      usersByRole[role] = (usersByRole[role] || 0) + 1;
+    }
+
+    const donationsByMonthMap = new Map();
+    let donationsTotal = 0;
+    for (const donation of donations) {
+      const amount = Number(donation.amount) || 0;
+      donationsTotal += amount;
+      const monthKey = toYearMonth(donation.createdAt);
+      if (!monthKey) continue;
+      donationsByMonthMap.set(monthKey, Number(donationsByMonthMap.get(monthKey) || 0) + amount);
+    }
+
+    let volunteerTotal = 0;
+    const volunteersByCampaign = campaigns
+      .map((campaign) => {
+        const count = Array.isArray(campaign.volunteers) ? campaign.volunteers.length : 0;
+        volunteerTotal += count;
+        return { name: campaign.title, count };
+      })
+      .sort((left, right) => right.count - left.count)
+      .slice(0, 5);
+
+    const usersByMonth = Array.from(usersByMonthMap.entries())
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([month, count]) => ({ month, count }));
+
+    const donationsByMonth = Array.from(donationsByMonthMap.entries())
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([month, total]) => ({ month, total }));
+
     const flaggedCount = (flaggedNgosCount || 0) + (flaggedCampaignsCount || 0);
-    const donationsTotal = donationsByMonth.reduce((sum, row) => sum + (row.total || 0), 0);
-    const volunteerTotal = volunteerTotals?.[0]?.total || 0;
 
     res.json({
       totals: {
@@ -221,13 +291,10 @@ router.get('/analytics', auth(['admin']), async (req, res) => {
         donationsTotal,
         volunteerTotal
       },
-      usersByMonth: usersByMonth.map(row => ({ month: row._id, count: row.count })),
-      usersByRole: usersByRole.reduce((acc, row) => {
-        acc[row._id || 'user'] = row.count;
-        return acc;
-      }, { admin: 0, ngo: 0, user: 0 }),
-      donationsByMonth: donationsByMonth.map(row => ({ month: row._id, total: row.total })),
-      volunteersByCampaign: volunteersByCampaign.map(row => ({ name: row.title, count: row.volunteerCount }))
+      usersByMonth,
+      usersByRole,
+      donationsByMonth,
+      volunteersByCampaign
     });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });

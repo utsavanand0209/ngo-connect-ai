@@ -1,8 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const connectDB = require('./config/db');
-
 const authRoutes = require('./routes/auth');
 const ngoRoutes = require('./routes/ngos');
 const campaignRoutes = require('./routes/campaigns');
@@ -13,6 +11,10 @@ const adminRoutes = require('./routes/admin');
 const aiRoutes = require('./routes/ai');
 const usersRoutes = require('./routes/users');
 const notificationsRoutes = require('./routes/notifications');
+const categoriesRoutes = require('./routes/categories');
+const requestsRoutes = require('./routes/requests');
+const certificatesRoutes = require('./routes/certificates');
+const { connectDB } = require('./db/postgres');
 
 const app = express();
 app.use(cors({
@@ -22,8 +24,6 @@ app.use(cors({
 app.use(express.json());
 
 const PORT = process.env.PORT || 5001;
-
-connectDB(process.env.MONGO_URI || 'mongodb://localhost:27017/ngo-connect');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/ngos', ngoRoutes);
@@ -35,7 +35,15 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/categories', categoriesRoutes);
+app.use('/api/requests', requestsRoutes);
+app.use('/api/certificates', certificatesRoutes);
 
 app.get('/', (req, res) => res.send({ ok: true, message: 'NGO Connect API running' }));
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const startServer = async () => {
+  await connectDB(process.env.POSTGRES_URL || process.env.DATABASE_URL);
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+};
+
+startServer();

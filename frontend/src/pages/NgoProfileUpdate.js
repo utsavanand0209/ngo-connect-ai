@@ -6,29 +6,66 @@ export default function NgoProfileUpdate() {
     name: '',
     email: '',
     category: '',
+    categories: [],
     description: '',
-    location: ''
+    location: '',
+    helplineNumber: '',
+    registrationId: '',
+    addressDetails: {
+      houseNumber: '',
+      landmark: '',
+      district: '',
+      state: '',
+      pincode: ''
+    }
   });
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [categoryOptions, setCategoryOptions] = useState([]);
 
   useEffect(() => {
     const fetchNgo = async () => {
       try {
         const res = await api.get('/ngos/me');
-        setNgo(res.data);
+        setNgo(prev => ({
+          ...prev,
+          ...res.data,
+          categories: res.data.categories || (res.data.category ? [res.data.category] : []),
+          addressDetails: res.data.addressDetails || prev.addressDetails
+        }));
       } catch (err) {
         console.log('No profile found, ready to create one.');
       }
     };
     fetchNgo();
+    api.get('/categories/all')
+      .then(res => setCategoryOptions(res.data || []))
+      .catch(() => setCategoryOptions([]));
   }, []);
 
   const handleProfileChange = (e) => {
     const { name, value } = e.target;
     setNgo(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddressChange = (field, value) => {
+    setNgo(prev => ({ ...prev, addressDetails: { ...prev.addressDetails, [field]: value } }));
+  };
+
+  const toggleCategory = (cat) => {
+    setNgo(prev => {
+      const exists = prev.categories.includes(cat);
+      const nextCategories = exists
+        ? prev.categories.filter(c => c !== cat)
+        : [...prev.categories, cat];
+      return {
+        ...prev,
+        categories: nextCategories,
+        category: nextCategories[0] || prev.category
+      };
+    });
   };
 
   const handleFileChange = (e) => {
@@ -91,20 +128,90 @@ export default function NgoProfileUpdate() {
                     <input id="email" type="email" name="email" value={ngo.email} onChange={handleProfileChange} required className="mt-1 w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
-                    <label htmlFor="category" className="block text-sm font-medium text-gray-700">Category</label>
-                    <select id="category" name="category" value={ngo.category} onChange={handleProfileChange} required className="mt-1 w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="">Select Category</option>
-                        <option value="Education">Education</option>
-                        <option value="Health">Health</option>
-                        <option value="Food">Food & Nutrition</option>
-                        <option value="Disaster Relief">Disaster Relief</option>
-                        <option value="Environment">Environment</option>
-                        <option value="Other">Other</option>
-                    </select>
+                    <label className="block text-sm font-medium text-gray-700">Categories</label>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(categoryOptions.length > 0 ? categoryOptions.map(c => c.name) : [
+                        'Birds',
+                        'Dogs',
+                        'Cows',
+                        'Cats',
+                        'Wildlife',
+                        'Senior Citizens',
+                        'Children',
+                        'Education',
+                        'Medical Support',
+                        'Other'
+                      ]).map(cat => (
+                        <button
+                          type="button"
+                          key={cat}
+                          onClick={() => toggleCategory(cat)}
+                          className={`px-3 py-1 rounded-full text-sm border ${
+                            ngo.categories?.includes(cat)
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-gray-600 border-gray-300'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
                 </div>
                 <div>
                     <label htmlFor="location" className="block text-sm font-medium text-gray-700">Location</label>
-                    <input id="location" type="text" name="location" value={ngo.location} onChange={handleProfileChange} placeholder="City, Country" required className="mt-1 w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input id="location" type="text" name="location" value={
+                      ngo.location && typeof ngo.location === 'object' && ngo.location.type === 'Point' && Array.isArray(ngo.location.coordinates)
+                        ? ngo.location.coordinates.join(', ')
+                        : ngo.location || ''
+                    } onChange={handleProfileChange} placeholder="City, Country" required className="mt-1 w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                    <label htmlFor="registrationId" className="block text-sm font-medium text-gray-700">Registration ID</label>
+                    <input id="registrationId" type="text" name="registrationId" value={ngo.registrationId || ''} onChange={handleProfileChange} className="mt-1 w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                    <label htmlFor="helplineNumber" className="block text-sm font-medium text-gray-700">Helpline Number</label>
+                    <input id="helplineNumber" type="text" name="helplineNumber" value={ngo.helplineNumber || ''} onChange={handleProfileChange} className="mt-1 w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700">Address</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                        <input
+                          type="text"
+                          placeholder="House No."
+                          value={ngo.addressDetails?.houseNumber || ''}
+                          onChange={(e) => handleAddressChange('houseNumber', e.target.value)}
+                          className="w-full p-3 border border-gray-300 rounded-lg shadow-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Landmark"
+                          value={ngo.addressDetails?.landmark || ''}
+                          onChange={(e) => handleAddressChange('landmark', e.target.value)}
+                          className="w-full p-3 border border-gray-300 rounded-lg shadow-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="District"
+                          value={ngo.addressDetails?.district || ''}
+                          onChange={(e) => handleAddressChange('district', e.target.value)}
+                          className="w-full p-3 border border-gray-300 rounded-lg shadow-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="State"
+                          value={ngo.addressDetails?.state || ''}
+                          onChange={(e) => handleAddressChange('state', e.target.value)}
+                          className="w-full p-3 border border-gray-300 rounded-lg shadow-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Pincode"
+                          value={ngo.addressDetails?.pincode || ''}
+                          onChange={(e) => handleAddressChange('pincode', e.target.value)}
+                          className="w-full p-3 border border-gray-300 rounded-lg shadow-sm"
+                        />
+                    </div>
                 </div>
                 <div className="md:col-span-2">
                     <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description</label>

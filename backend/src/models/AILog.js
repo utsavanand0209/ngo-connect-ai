@@ -1,8 +1,8 @@
-const mongoose = require('mongoose');
-const AILogSchema = new mongoose.Schema({
-  type: String,
-  payload: mongoose.Schema.Types.Mixed,
-  result: mongoose.Schema.Types.Mixed,
-  createdAt: { type: Date, default: Date.now }
+const { createModel } = require('../db/modelFactory');
+
+module.exports = createModel({
+  modelName: 'AILog',
+  tableName: 'ai_logs_rel',
+  docColumn: 'source_doc',
+  externalIdColumn: 'external_id'
 });
-module.exports = mongoose.model('AILog', AILogSchema);

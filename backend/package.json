@@ -5,7 +5,9 @@
   "license": "MIT",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "seed": "node seed.js",
+    "db:relational-schema": "bash -lc 'source .env && psql \"$POSTGRES_URL\" -v ON_ERROR_STOP=1 -f sql/normalized_schema.sql'"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -14,8 +16,8 @@
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^7.8.9",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@faker-js/faker": "^10.2.0",

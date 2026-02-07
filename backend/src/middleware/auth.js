@@ -1,6 +1,4 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const NGO = require('../models/NGO');
 
 const auth = (roles = []) => {
   // roles can be a single role string or array

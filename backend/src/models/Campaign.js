@@ -1,17 +1,13 @@
-const mongoose = require('mongoose');
-const CampaignSchema = new mongoose.Schema({
-  ngo: { type: mongoose.Schema.Types.ObjectId, ref: 'NGO', required: true },
-  title: { type: String, required: true },
-  description: String,
-  image: String,
-  category: String,
-  location: String,
-  goalAmount: Number,
-  currentAmount: { type: Number, default: 0 },
-  volunteersNeeded: [String],
-  volunteers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  flagged: { type: Boolean, default: false },
-  flagReason: String,
-  createdAt: { type: Date, default: Date.now }
+const { createModel } = require('../db/modelFactory');
+
+module.exports = createModel({
+  modelName: 'Campaign',
+  tableName: 'campaigns_rel',
+  docColumn: 'source_doc',
+  externalIdColumn: 'external_id',
+  refs: {
+    ngo: 'NGO',
+    volunteers: 'User',
+    'volunteerRegistrations.user': 'User'
+  }
 });
-module.exports = mongoose.model('Campaign', CampaignSchema);

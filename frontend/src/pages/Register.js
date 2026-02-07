@@ -1,20 +1,64 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 export default function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [mobileNumber, setMobileNumber] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('user');
+  const [registrationId, setRegistrationId] = useState('');
+  const [helplineNumber, setHelplineNumber] = useState('');
+  const [addressDetails, setAddressDetails] = useState({
+    houseNumber: '',
+    landmark: '',
+    district: '',
+    state: '',
+    pincode: ''
+  });
+  const [categories, setCategories] = useState([]);
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    api.get('/categories/all')
+      .then(res => setCategories(res.data || []))
+      .catch(() => setCategories([]));
+  }, []);
+
+  const toggleCategory = (name) => {
+    setSelectedCategories(prev => (
+      prev.includes(name)
+        ? prev.filter(cat => cat !== name)
+        : [...prev, name]
+    ));
+  };
+
+  const handleAddressChange = (field, value) => {
+    setAddressDetails(prev => ({ ...prev, [field]: value }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     try {
-      await api.post('/auth/register', { name, email, password, role });
+      if (role === 'ngo' && selectedCategories.length === 0) {
+        setError('Please select at least one category.');
+        return;
+      }
+      await api.post('/auth/register', {
+        name,
+        email,
+        password,
+        role,
+        mobileNumber: role === 'user' ? mobileNumber : undefined,
+        registrationId: role === 'ngo' ? registrationId : undefined,
+        helplineNumber: role === 'ngo' ? helplineNumber : undefined,
+        categories: role === 'ngo' ? selectedCategories : undefined,
+        addressDetails: role === 'ngo' ? addressDetails : undefined
+      });
       navigate('/login');
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
@@ -83,6 +127,25 @@ export default function Register() {
               </div>
             </div>
 
+            {role === 'user' && (
+              <div>
+                <label htmlFor="mobile" className="block text-sm font-medium text-gray-700">
+                  Mobile Number
+                </label>
+                <div className="mt-1">
+                  <input
+                    id="mobile"
+                    name="mobile"
+                    type="tel"
+                    required
+                    value={mobileNumber}
+                    onChange={(e) => setMobileNumber(e.target.value)}
+                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
+                </div>
+              </div>
+            )}
+
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
@@ -118,6 +181,101 @@ export default function Register() {
                 </select>
               </div>
             </div>
+
+            {role === 'ngo' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Registration ID</label>
+                  <input
+                    type="text"
+                    value={registrationId}
+                    onChange={(e) => setRegistrationId(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Helpline Number</label>
+                  <input
+                    type="tel"
+                    value={helplineNumber}
+                    onChange={(e) => setHelplineNumber(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Address</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                    <input
+                      type="text"
+                      placeholder="House No."
+                      value={addressDetails.houseNumber}
+                      onChange={(e) => handleAddressChange('houseNumber', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Landmark"
+                      value={addressDetails.landmark}
+                      onChange={(e) => handleAddressChange('landmark', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                    />
+                    <input
+                      type="text"
+                      placeholder="District"
+                      value={addressDetails.district}
+                      onChange={(e) => handleAddressChange('district', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                    />
+                    <input
+                      type="text"
+                      placeholder="State"
+                      value={addressDetails.state}
+                      onChange={(e) => handleAddressChange('state', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Pincode"
+                      value={addressDetails.pincode}
+                      onChange={(e) => handleAddressChange('pincode', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Categories</label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(categories.length > 0 ? categories.map(c => c.name) : [
+                      'Birds',
+                      'Dogs',
+                      'Cows',
+                      'Cats',
+                      'Wildlife',
+                      'Senior Citizens',
+                      'Children',
+                      'Education',
+                      'Medical Support',
+                      'Other'
+                    ]).map(cat => (
+                      <button
+                        type="button"
+                        key={cat}
+                        onClick={() => toggleCategory(cat)}
+                        className={`px-3 py-1 rounded-full text-sm border ${
+                          selectedCategories.includes(cat)
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'bg-white text-gray-600 border-gray-300'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div>
               <button

@@ -42,8 +42,8 @@ export default function FlaggedContent() {
     try {
       await api.put(`/admin/resolve-flag/${type}/${id}`);
       setMessage('Flag resolved!');
-      if (type === 'ngo') setNgos(prev => prev.filter(n => n._id !== id));
-      if (type === 'campaign') setCampaigns(prev => prev.filter(c => c._id !== id));
+      if (type === 'ngo') setNgos(prev => prev.filter(n => n.id !== id));
+      if (type === 'campaign') setCampaigns(prev => prev.filter(c => c.id !== id));
     } catch (err) {
       setMessage('Failed to resolve flag.');
     }
@@ -58,7 +58,7 @@ export default function FlaggedContent() {
         await api.put(`/admin/flag-requests/${id}/reject`);
         setMessage('Flag request rejected.');
       }
-      setRequests(prev => prev.filter(r => r._id !== id));
+      setRequests(prev => prev.filter(r => r.id !== id));
       await loadFlagged();
     } catch (err) {
       setMessage('Failed to resolve request.');
@@ -76,7 +76,7 @@ export default function FlaggedContent() {
         <ul className="mb-6 border rounded p-2">
           {requests.length === 0 && <li className="text-gray-500">No pending requests</li>}
           {requests.map(req => (
-            <li key={req._id} className="mb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <li key={req.id} className="mb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
               <span>
                 <b>{req.targetType.toUpperCase()}</b> - {req.targetName || req.targetId}
                 {req.reason ? ` • ${req.reason}` : ''}
@@ -84,13 +84,13 @@ export default function FlaggedContent() {
               <div className="flex gap-2">
                 <button
                   className="bg-green-600 text-white px-2 py-1 rounded"
-                  onClick={() => resolveRequest(req._id, 'approve')}
+                  onClick={() => resolveRequest(req.id, 'approve')}
                 >
                   Approve & Flag
                 </button>
                 <button
                   className="bg-gray-600 text-white px-2 py-1 rounded"
-                  onClick={() => resolveRequest(req._id, 'reject')}
+                  onClick={() => resolveRequest(req.id, 'reject')}
                 >
                   Reject
                 </button>
@@ -107,9 +107,9 @@ export default function FlaggedContent() {
       <ul className="mb-6 border rounded p-2">
         {ngos.length === 0 && <li className="text-gray-500">No flagged NGOs</li>}
         {ngos.map(ngo => (
-          <li key={ngo._id} className="mb-2 flex justify-between items-center">
+          <li key={ngo.id} className="mb-2 flex justify-between items-center">
             <span><b>{ngo.name}</b> - {ngo.flagReason || 'No reason provided'}</span>
-            <button className="bg-blue-600 text-white px-2 py-1 rounded" onClick={() => resolveFlag('ngo', ngo._id)}>Resolve</button>
+            <button className="bg-blue-600 text-white px-2 py-1 rounded" onClick={() => resolveFlag('ngo', ngo.id)}>Resolve</button>
           </li>
         ))}
       </ul>
@@ -117,9 +117,9 @@ export default function FlaggedContent() {
       <ul className="border rounded p-2">
         {campaigns.length === 0 && <li className="text-gray-500">No flagged campaigns</li>}
         {campaigns.map(camp => (
-          <li key={camp._id} className="mb-2 flex justify-between items-center">
+          <li key={camp.id} className="mb-2 flex justify-between items-center">
             <span><b>{camp.title}</b> - {camp.flagReason || 'No reason provided'}</span>
-            <button className="bg-blue-600 text-white px-2 py-1 rounded" onClick={() => resolveFlag('campaign', camp._id)}>Resolve</button>
+            <button className="bg-blue-600 text-white px-2 py-1 rounded" onClick={() => resolveFlag('campaign', camp.id)}>Resolve</button>
           </li>
         ))}
       </ul>

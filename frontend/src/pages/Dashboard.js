@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import UserDashboard from './UserDashboard';
 import NgoDashboard from './NgoDashboard';
 import AdminDashboard from './AdminDashboard';
@@ -32,7 +32,7 @@ export default function Dashboard() {
 
   switch (role) {
     case 'admin':
-      return <AdminDashboard />;
+      return <Navigate to="/admin" replace />;
     case 'ngo':
       return <NgoDashboard />;
     case 'user':

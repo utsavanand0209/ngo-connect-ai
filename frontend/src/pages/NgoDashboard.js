@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
+import {
+  getNgoHelpRequests,
+  updateHelpRequestStatus,
+  getNgoDonationApprovalQueue,
+  reviewDonationCertificateRequest,
+  getNgoVolunteerApprovalQueue,
+  reviewVolunteerCertificateRequest
+} from '../services/api';
 
 export default function NgoDashboard() {
   const [user, setUser] = useState(null);
@@ -10,6 +18,13 @@ export default function NgoDashboard() {
   const [campaignStats, setCampaignStats] = useState({ totalDonations: 0, volunteerCount: 0 });
   const [notifications, setNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [helpRequests, setHelpRequests] = useState([]);
+  const [requestMessage, setRequestMessage] = useState('');
+  const [donationApprovals, setDonationApprovals] = useState([]);
+  const [volunteerApprovals, setVolunteerApprovals] = useState([]);
+  const [approvalLoading, setApprovalLoading] = useState(true);
+  const [approvalMessage, setApprovalMessage] = useState('');
+  const [approvalNotes, setApprovalNotes] = useState({});
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -22,10 +37,10 @@ export default function NgoDashboard() {
           api.get('/ngos/me')
             .then(async res => {
               setNgo(res.data);
-              const ngoId = res.data._id;
+              const ngoId = res.data.id;
               try {
                 const campRes = await api.get('/campaigns');
-                const related = campRes.data.filter(c => (c.ngo?._id || c.ngo) === ngoId);
+                const related = campRes.data.filter(c => (c.ngo?.id || c.ngo) === ngoId);
                 setCampaigns(related);
                 const totalDonations = related.reduce((sum, c) => sum + (Number(c.currentAmount) || 0), 0);
                 const volunteerCount = related.reduce((sum, c) => sum + ((c.volunteers || []).length), 0);
@@ -53,7 +68,72 @@ export default function NgoDashboard() {
       .then(res => setNotifications(res.data || []))
       .catch(() => setNotifications([]))
       .finally(() => setNotificationsLoading(false));
+
+    getNgoHelpRequests()
+      .then(res => setHelpRequests(res.data || []))
+      .catch(() => setHelpRequests([]));
+
+    loadApprovals();
   }, []);
+
+  const loadApprovals = async () => {
+    setApprovalLoading(true);
+    try {
+      const [donationRes, volunteerRes] = await Promise.all([
+        getNgoDonationApprovalQueue(),
+        getNgoVolunteerApprovalQueue()
+      ]);
+      setDonationApprovals(donationRes.data || []);
+      setVolunteerApprovals(volunteerRes.data || []);
+    } catch (err) {
+      setDonationApprovals([]);
+      setVolunteerApprovals([]);
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+
+  const handleApprovalNoteChange = (key, value) => {
+    setApprovalNotes(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleDonationCertificateDecision = async (donationId, decision) => {
+    try {
+      const noteKey = `donation-${donationId}`;
+      await reviewDonationCertificateRequest(donationId, {
+        decision,
+        note: approvalNotes[noteKey] || ''
+      });
+      setApprovalMessage(`Donation certificate request ${decision === 'approve' ? 'approved' : 'rejected'}.`);
+      loadApprovals();
+    } catch (err) {
+      setApprovalMessage(err.response?.data?.message || 'Failed to process donation approval.');
+    }
+  };
+
+  const handleVolunteerCertificateDecision = async (applicationId, decision) => {
+    try {
+      const noteKey = `volunteer-${applicationId}`;
+      await reviewVolunteerCertificateRequest(applicationId, {
+        decision,
+        note: approvalNotes[noteKey] || ''
+      });
+      setApprovalMessage(`Volunteer certificate request ${decision === 'approve' ? 'approved' : 'rejected'}.`);
+      loadApprovals();
+    } catch (err) {
+      setApprovalMessage(err.response?.data?.message || 'Failed to process volunteer approval.');
+    }
+  };
+
+  const handleRequestStatus = async (id, status) => {
+    try {
+      const res = await updateHelpRequestStatus(id, status);
+      setHelpRequests(prev => prev.map(req => (req.id === id ? res.data : req)));
+      setRequestMessage('Request status updated.');
+    } catch (err) {
+      setRequestMessage('Failed to update request.');
+    }
+  };
 
   if (loading) return <div className="p-6 text-center">Loading...</div>;
 
@@ -106,7 +186,7 @@ export default function NgoDashboard() {
           ) : (
             <div className="space-y-3">
               {notifications.slice(0, 5).map(note => (
-                <div key={note._id} className="border rounded-md p-3">
+                <div key={note.id} className="border rounded-md p-3">
                   <div className="flex items-center justify-between">
                     <p className="font-semibold text-gray-800">{note.title}</p>
                     <span className="text-xs text-gray-500">{new Date(note.createdAt).toLocaleString()}</span>
@@ -114,6 +194,155 @@ export default function NgoDashboard() {
                   <p className="text-sm text-gray-700 mt-1">{note.message}</p>
                 </div>
               ))}
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white rounded-lg shadow-lg p-8 mb-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">📥 Support Requests</h2>
+          <p className="text-gray-600 mb-4">Review beneficiary requests and update their status.</p>
+          {requestMessage && (
+            <div className="mb-4 p-3 rounded bg-blue-50 border border-blue-200 text-blue-800">{requestMessage}</div>
+          )}
+          {helpRequests.length === 0 ? (
+            <p className="text-gray-500">No requests received yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {helpRequests.map(req => (
+                <div key={req.id} className="border rounded-lg p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-gray-800">{req.name}</p>
+                    <p className="text-sm text-gray-500">
+                      {req.helpType} • {req.location || 'Location not specified'} • Age: {req.age || 'N/A'}
+                    </p>
+                    <p className="text-xs text-gray-400">Mobile: {req.mobileNumber}</p>
+                    {req.description && <p className="text-sm text-gray-600 mt-2">{req.description}</p>}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <select
+                      value={req.status}
+                      onChange={(e) => handleRequestStatus(req.id, e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg"
+                    >
+                      {['Pending', 'Approved', 'In Progress', 'Completed', 'Rejected'].map(status => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                    <span className="text-xs text-gray-400">Submitted: {new Date(req.createdAt).toLocaleString()}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white rounded-lg shadow-lg p-8 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-800">✅ Certificate Approvals</h2>
+            <button
+              type="button"
+              onClick={loadApprovals}
+              className="px-3 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+            >
+              Refresh
+            </button>
+          </div>
+          <p className="text-gray-600 mb-4">Approve or reject certificate requests for donations and completed volunteer work.</p>
+          {approvalMessage && (
+            <div className="mb-4 p-3 rounded bg-blue-50 border border-blue-200 text-blue-800">{approvalMessage}</div>
+          )}
+          {approvalLoading ? (
+            <p className="text-gray-600">Loading certificate requests...</p>
+          ) : (
+            <div className="space-y-8">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">Donation Certificate Requests</h3>
+                {donationApprovals.length === 0 ? (
+                  <p className="text-gray-500">No pending donation certificate approvals.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {donationApprovals.map(donation => {
+                      const noteKey = `donation-${donation.id}`;
+                      return (
+                        <div key={donation.id} className="border rounded-lg p-4">
+                          <p className="font-semibold text-gray-800">{donation.user?.name || 'Donor'} • ₹{Number(donation.amount || 0).toLocaleString('en-IN')}</p>
+                          <p className="text-sm text-gray-600">{donation.campaign?.title || 'Campaign'}</p>
+                          <p className="text-xs text-gray-500 mt-1">Requested: {new Date(donation.certificateApprovalRequestedAt || donation.createdAt).toLocaleString()}</p>
+                          <textarea
+                            value={approvalNotes[noteKey] || ''}
+                            onChange={(e) => handleApprovalNoteChange(noteKey, e.target.value)}
+                            placeholder="Optional note"
+                            className="mt-3 w-full border border-gray-300 rounded-md p-2 text-sm"
+                            rows={2}
+                          />
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleDonationCertificateDecision(donation.id, 'approve')}
+                              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                            >
+                              Approve & Issue
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDonationCertificateDecision(donation.id, 'reject')}
+                              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">Volunteer Certificate Requests</h3>
+                {volunteerApprovals.length === 0 ? (
+                  <p className="text-gray-500">No pending volunteer certificate approvals.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {volunteerApprovals.map(application => {
+                      const noteKey = `volunteer-${application.id}`;
+                      return (
+                        <div key={application.id} className="border rounded-lg p-4">
+                          <p className="font-semibold text-gray-800">{application.user?.name || application.fullName || 'Volunteer'}</p>
+                          <p className="text-sm text-gray-600">{application.opportunity?.title || 'Volunteer Opportunity'}</p>
+                          <p className="text-xs text-gray-500 mt-1">Completed: {application.completedAt ? new Date(application.completedAt).toLocaleString() : 'N/A'}</p>
+                          {application.assignedTask && (
+                            <p className="text-xs text-gray-600 mt-1">Task: {application.assignedTask}</p>
+                          )}
+                          <textarea
+                            value={approvalNotes[noteKey] || ''}
+                            onChange={(e) => handleApprovalNoteChange(noteKey, e.target.value)}
+                            placeholder="Optional note"
+                            className="mt-3 w-full border border-gray-300 rounded-md p-2 text-sm"
+                            rows={2}
+                          />
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleVolunteerCertificateDecision(application.id, 'approve')}
+                              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                            >
+                              Approve & Issue
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleVolunteerCertificateDecision(application.id, 'reject')}
+                              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </section>
@@ -180,10 +409,10 @@ export default function NgoDashboard() {
           {campaigns.filter(c => c.volunteersNeeded && c.volunteersNeeded.length > 0).length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {campaigns.filter(c => c.volunteersNeeded && c.volunteersNeeded.length > 0).map(campaign => (
-                <div key={campaign._id} className="border rounded-lg p-4 hover:shadow-lg">
+                <div key={campaign.id} className="border rounded-lg p-4 hover:shadow-lg">
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-bold text-lg">{campaign.title}</h3>
-                    <Link to={`/campaigns/${campaign._id}`} className="text-indigo-600 text-sm hover:underline">
+                    <Link to={`/campaigns/${campaign.id}`} className="text-indigo-600 text-sm hover:underline">
                       View
                     </Link>
                   </div>

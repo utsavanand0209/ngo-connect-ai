@@ -3,6 +3,7 @@ import api from '../services/api';
 import { Link } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import { getUserRole } from '../utils/auth';
+import { buildDirectionsUrl, getCampaignCoordinates, getCampaignLocationText } from '../utils/location';
 
 export default function CampaignList() {
   const [campaigns, setCampaigns] = useState([]);
@@ -36,11 +37,23 @@ export default function CampaignList() {
       });
   }, []);
 
-  const filteredCampaigns = campaigns.filter(c => {
+  const filteredCampaigns = campaigns.filter((campaign) => {
+    const haystack = [
+      campaign.title,
+      campaign.description,
+      campaign.location,
+      campaign.area,
+      campaign.category,
+      campaign.ngo?.name
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
     return (
-      (c.title.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (category === '' || (c.category && c.category.toLowerCase() === category.toLowerCase())) &&
-      (location === '' || (c.location && c.location.toLowerCase().includes(location.toLowerCase())))
+      haystack.includes(searchTerm.toLowerCase()) &&
+      (category === '' || (campaign.category && campaign.category.toLowerCase() === category.toLowerCase())) &&
+      (location === '' || haystack.includes(location.toLowerCase()))
     );
   });
 
@@ -60,6 +73,7 @@ export default function CampaignList() {
   };
 
   const getActionLabel = (campaign) => {
+    if (!isUser) return 'View Campaign';
     const hasFunding = campaign.goalAmount > 0;
     const hasVolunteers = campaign.volunteersNeeded && campaign.volunteersNeeded.length > 0;
     if (hasFunding && hasVolunteers) return 'View & Support';
@@ -85,12 +99,12 @@ export default function CampaignList() {
     setFlagMessage('');
     try {
       if (isAdmin) {
-        const res = await api.post(`/campaigns/${selectedCampaign._id}/flag`, { reason: flagReason });
-        setCampaigns(prev => prev.map(c => (c._id === selectedCampaign._id ? res.data.campaign : c)));
+        const res = await api.post(`/campaigns/${selectedCampaign.id}/flag`, { reason: flagReason });
+        setCampaigns(prev => prev.map(c => (c.id === selectedCampaign.id ? res.data.campaign : c)));
         setFlagMessage('Campaign flagged successfully.');
       } else if (isUser) {
-        await api.post(`/campaigns/${selectedCampaign._id}/flag-request`, { reason: flagReason });
-        setRequestedIds(prev => [...new Set([...prev, selectedCampaign._id])]);
+        await api.post(`/campaigns/${selectedCampaign.id}/flag-request`, { reason: flagReason });
+        setRequestedIds(prev => [...new Set([...prev, selectedCampaign.id])]);
         setFlagMessage('Request sent to admin for review.');
       } else {
         setFlagMessage('Please login to submit a request.');
@@ -149,12 +163,13 @@ export default function CampaignList() {
         ) : filteredCampaigns.length > 0 ? (
           <div className="grid gap-8 lg:grid-cols-3">
             {filteredCampaigns.map(c => (
-              <div key={c._id} className="bg-white rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-2 transition-transform duration-300 flex flex-col">
+              <div key={c.id} className="bg-white rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-2 transition-transform duration-300 flex flex-col">
                 <img className="h-56 w-full object-cover" src={c.image || `https://source.unsplash.com/random/400x300?cause,${c.category}`} alt={c.title} />
                 <div className="p-6 flex flex-col flex-grow">
                   <p className="text-sm font-semibold text-indigo-600 uppercase tracking-wide">{c.category}</p>
                   <h3 className="text-2xl font-bold text-gray-900 mt-1">{c.title}</h3>
-                  <p className="mt-2 text-gray-600 text-base flex-grow">{c.description.substring(0, 120)}...</p>
+                  <p className="mt-2 text-gray-600 text-base flex-grow">{(c.description || '').substring(0, 120)}...</p>
+                  <p className="mt-2 text-sm text-gray-500">{getCampaignLocationText(c)}</p>
                   <div className="mt-4">
                     {c.goalAmount > 0 && (
                   <ProgressBar current={c.currentAmount} goal={c.goalAmount} />
@@ -169,23 +184,48 @@ export default function CampaignList() {
                     )}
                   </div>
                   <div className="mt-4 flex flex-col gap-2">
-                    <Link to={`/campaigns/${c._id}`} className="w-full inline-block text-center px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300">
+                    <Link to={`/campaigns/${c.id}`} className="w-full inline-block text-center px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300">
                       {getActionLabel(c)}
                     </Link>
+                    {(() => {
+                      const coordinates = getCampaignCoordinates(c);
+                      const directionsUrl = coordinates
+                        ? buildDirectionsUrl({ lat: coordinates.lat, lng: coordinates.lng })
+                        : '';
+
+                      if (!directionsUrl) {
+                        return (
+                          <span className="w-full inline-block text-center px-6 py-2 border border-gray-300 text-gray-400 font-semibold rounded-lg">
+                            Directions Unavailable
+                          </span>
+                        );
+                      }
+
+                      return (
+                        <a
+                          href={directionsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full inline-block text-center px-6 py-2 border border-indigo-600 text-indigo-600 font-semibold rounded-lg hover:bg-indigo-50"
+                        >
+                          Get Directions
+                        </a>
+                      );
+                    })()}
                     <button
                       onClick={() => openFlagModal(c)}
-                      disabled={c.flagged || requestedIds.includes(c._id)}
+                      disabled={c.flagged || requestedIds.includes(c.id)}
                       className="w-full inline-block text-center px-6 py-2 border border-red-600 text-red-600 font-semibold rounded-lg hover:bg-red-50 disabled:text-gray-400 disabled:border-gray-300"
                     >
                       {c.flagged
                         ? 'Flagged'
-                        : requestedIds.includes(c._id)
+                        : requestedIds.includes(c.id)
                           ? 'Request Sent'
                           : isAdmin
                             ? 'Flag Campaign'
                             : 'Request Admin Review'}
                     </button>
-                    {flagMessage && selectedCampaign && selectedCampaign._id === c._id && (
+                    {flagMessage && selectedCampaign && selectedCampaign.id === c.id && (
                       <p className="text-xs text-gray-600 text-center">{flagMessage}</p>
                     )}
                   </div>

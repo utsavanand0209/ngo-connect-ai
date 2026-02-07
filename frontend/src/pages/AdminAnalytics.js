@@ -30,15 +30,20 @@ export default function AdminAnalytics() {
     donationsByMonth: [],
     volunteersByCampaign: []
   });
+  const [ngoData, setNgoData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     let isMounted = true;
-    api.get('/admin/analytics')
-      .then(res => {
+    const fetchAnalytics = api.get('/admin/analytics');
+    const fetchNgos = api.get('/ngos');
+
+    Promise.all([fetchAnalytics, fetchNgos])
+      .then(([analyticsRes, ngosRes]) => {
         if (!isMounted) return;
-        setAnalytics(res.data);
+        setAnalytics(analyticsRes.data);
+        setNgoData(ngosRes.data);
       })
       .catch(() => {
         if (!isMounted) return;
@@ -48,6 +53,7 @@ export default function AdminAnalytics() {
         if (!isMounted) return;
         setLoading(false);
       });
+
     return () => { isMounted = false; };
   }, []);
 
@@ -66,6 +72,16 @@ export default function AdminAnalytics() {
     if (num >= 1000) return `₹${(num / 1000).toFixed(1)}K`;
     return `₹${num}`;
   };
+
+  const topNgosByIncome = ngoData
+    .filter(ngo => ngo.financials && ngo.financials.income && ngo.financials.income.length > 0)
+    .sort((a, b) => b.financials.income.slice(-1)[0] - a.financials.income.slice(-1)[0])
+    .slice(0, 5)
+    .map(ngo => ({
+      name: ngo.name,
+      income: ngo.financials.income.slice(-1)[0],
+      expenses: ngo.financials.expenses.slice(-1)[0]
+    }));
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
@@ -140,19 +156,38 @@ export default function AdminAnalytics() {
               </div>
             </div>
 
-            <div className="border rounded-lg p-4 mb-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-3">Top Campaigns by Volunteers</h2>
-              <div style={{ width: '100%', height: 280 }}>
-                <ResponsiveContainer>
-                  <BarChart data={analytics.volunteersByCampaign} margin={{ left: 10, right: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={60} />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="count" name="Volunteers" fill="#f97316" />
-                  </BarChart>
-                </ResponsiveContainer>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <div className="border rounded-lg p-4">
+                <h2 className="text-lg font-semibold text-gray-800 mb-3">Top Campaigns by Volunteers</h2>
+                <div style={{ width: '100%', height: 280 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={analytics.volunteersByCampaign} margin={{ left: 10, right: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={60} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="count" name="Volunteers" fill="#f97316" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="border rounded-lg p-4">
+                <h2 className="text-lg font-semibold text-gray-800 mb-3">Top 5 NGOs by Income (Latest Year)</h2>
+                <div style={{ width: '100%', height: 280 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={topNgosByIncome} margin={{ left: 10, right: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={60} />
+                      <YAxis tickFormatter={formatCurrency} />
+                      <Tooltip formatter={(value) => `₹${Number(value).toLocaleString()}`} />
+                      <Legend />
+                      <Bar dataKey="income" name="Income" fill="#8884d8" />
+                      <Bar dataKey="expenses" name="Expenses" fill="#82ca9d" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
           </>

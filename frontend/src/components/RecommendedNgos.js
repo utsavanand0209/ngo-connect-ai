@@ -56,7 +56,7 @@ const RecommendedNgos = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {ngos.map(ngo => (
-            <div key={ngo._id} className="border rounded-lg p-4 flex flex-col justify-between hover:shadow-md transition">
+            <div key={ngo.id} className="border rounded-lg p-4 flex flex-col justify-between hover:shadow-md transition">
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   {ngo.logo ? (
@@ -84,7 +84,7 @@ const RecommendedNgos = () => {
                   </div>
                 )}
               </div>
-              <Link to={`/ngos/${ngo._id}`} className="text-indigo-600 hover:text-indigo-900 text-sm font-medium self-start mt-2">
+              <Link to={`/ngos/${ngo.id}`} className="text-indigo-600 hover:text-indigo-900 text-sm font-medium self-start mt-2">
                 View Profile →
               </Link>
             </div>

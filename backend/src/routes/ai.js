@@ -23,7 +23,7 @@ router.post('/recommend-ngos', async (req, res) => {
     const ngos = await NGO.find({ verified: true });
     const scored = ngos.map(n => {
       let score = 0;
-      if (location && n.location && n.location.toLowerCase().includes(location.toLowerCase())) score += 3;
+      if (location && n.location && typeof n.location === 'string' && n.location.toLowerCase().includes(location.toLowerCase())) score += 3;
       if (user && user.interests) {
         const common = user.interests.filter(i => (n.category || '').toLowerCase().includes(i.toLowerCase()));
         score += common.length * 2;
@@ -33,7 +33,7 @@ router.post('/recommend-ngos', async (req, res) => {
       return { ngo: n, score };
     });
     scored.sort((a, b) => b.score - a.score);
-    await AILog.create({ type: 'recommend', payload: { userId, location, interests }, result: scored.slice(0, 10).map(s => ({ id: s.ngo._id, score: s.score })) });
+    await AILog.create({ type: 'recommend', payload: { userId, location, interests }, result: scored.slice(0, 10).map(s => ({ id: s.ngo.id, score: s.score })) });
     res.json(scored.slice(0, 10));
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -55,9 +55,11 @@ router.get('/recommendations', auth(), async (req, res) => {
     const causes = user.preferences?.causes || user.preferences?.causesCareAbout || [];
     
     // Get verified NGOs and active campaigns
-    const ngos = await NGO.find({ verified: true });
-    const campaigns = await Campaign.find().populate('ngo', 'name logo location');
-    const validCampaigns = campaigns.filter(c => c.ngo && c.ngo._id);
+    const ngos = await NGO.find({ verified: true, isActive: true });
+    const campaigns = await Campaign.find().populate('ngo', 'name logo location verified isActive');
+    const validCampaigns = campaigns.filter(
+      c => c.ngo && c.ngo.id && c.ngo.verified !== false && c.ngo.isActive !== false
+    );
 
     // Scoring and matching for NGOs
     const scoredNgos = ngos.map(ngo => {
@@ -77,7 +79,7 @@ router.get('/recommendations', auth(), async (req, res) => {
           });
         }
         // Check location field
-        if (ngo.location && userLocations.some(loc => ngo.location.toLowerCase().includes(loc.toLowerCase()))) {
+        if (typeof ngo.location === 'string' && userLocations.some(loc => ngo.location.toLowerCase().includes(loc.toLowerCase()))) {
           score += 4;
           reasons.push('Works in your area');
         }
@@ -159,7 +161,7 @@ router.get('/recommendations', auth(), async (req, res) => {
 
       // NGO credibility (based on parent NGO's score)
       const ngoMatch = campaign.ngo
-        ? scoredNgos.find(n => n.ngo._id.toString() === campaign.ngo._id.toString())
+        ? scoredNgos.find(n => n.ngo.id.toString() === campaign.ngo.id.toString())
         : null;
       if (ngoMatch) {
         score += ngoMatch.score * 0.3;
@@ -190,7 +192,7 @@ router.get('/recommendations', auth(), async (req, res) => {
     await AILog.create({ 
       type: 'recommendations', 
       payload: { 
-        userId: user._id, 
+        userId: user.id,
         preferences: {
           location: userLocation,
           interests: userInterests,
@@ -208,7 +210,7 @@ router.get('/recommendations', auth(), async (req, res) => {
       campaigns: recommendedCampaigns
     });
   } catch (err) {
-    console.error(err.message);
+    console.error('Error in /recommendations:', err);
     res.status(500).send('Server Error');
   }
 });
@@ -327,7 +329,7 @@ router.post('/fraud-score', async (req, res) => {
     if (ageDays < 30) score += 20;
     if ((ngo.description || '').toLowerCase().match(/urgent|donate now|click here/)) score += 30;
     // mock high donation goal detection via campaigns
-    const campaigns = await Campaign.find({ ngo: ngo._id });
+    const campaigns = await Campaign.find({ ngo: ngo.id });
     const highGoal = campaigns.some(c => (c.goalAmount || 0) >= 100000);
     if (highGoal) score += 20;
     const flagged = score >= 50;
@@ -356,7 +358,7 @@ router.post('/match-volunteers', async (req, res) => {
       return { user: u, score };
     });
     scored.sort((a, b) => b.score - a.score);
-    await AILog.create({ type: 'match', payload: { campaignId }, result: scored.slice(0, 10).map(s => ({ id: s.user._id, score: s.score })) });
+    await AILog.create({ type: 'match', payload: { campaignId }, result: scored.slice(0, 10).map(s => ({ id: s.user.id, score: s.score })) });
     res.json(scored.slice(0, 10));
   } catch (err) {
     res.status(500).json({ message: 'Server error' });

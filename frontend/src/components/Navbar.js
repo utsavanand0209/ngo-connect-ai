@@ -39,49 +39,63 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-white shadow-md">
+    <nav className="bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center">
-            <Link to="/" className="text-2xl font-bold text-blue-600">NGO Connect</Link>
-          </div>
-          <div className="hidden md:block">
-            <div className="ml-10 flex items-baseline space-x-4">
-              <Link to="/discover" className="text-gray-700 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Discover NGOs</Link>
-              <Link to="/volunteer-campaigns" className="text-gray-700 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Volunteer</Link>
-              <Link to="/donate" className="text-gray-700 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Donate</Link>
-              <Link to="/insights" className="text-gray-700 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Insights</Link>
-              <Link to="/campaigns" className="text-gray-700 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Campaigns</Link>
-              <Link to="/chatbot" className="text-gray-700 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Chatbot</Link>
-              {isAuthenticated && userRole === 'ngo' && <Link to="/ngo/profile" className="text-gray-700 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium">My NGO Profile</Link>}
-              {isAuthenticated && userRole === 'admin' && <Link to="/admin" className="text-gray-700 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Admin Panel</Link>}
-            </div>
-          </div>
-          <div className="hidden md:block">
-            <div className="ml-4 flex items-center md:ml-6">
-              {isAuthenticated ? (
-                <>
-                  <Link to="/dashboard" className="text-gray-700 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Dashboard</Link>
-                  <button
-                    onClick={handleLogout}
-                    className="ml-4 text-gray-700 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
-                  >
-                    Logout
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link to="/login" className="text-gray-700 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Login</Link>
-                  <Link to="/register" className="ml-4 text-gray-700 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium">Register</Link>
-                </>
+          <div className="flex items-center gap-8">
+            <Link to="/" className="text-lg font-semibold text-gray-900 tracking-tight">
+              NGO Connect
+            </Link>
+            <div className="hidden md:flex items-center gap-6 text-sm font-medium">
+              <Link to="/discover" className="text-gray-600 hover:text-gray-900 transition-colors">NGOs</Link>
+              <Link to="/map" className="text-gray-600 hover:text-gray-900 transition-colors">Map</Link>
+              <Link to="/campaigns" className="text-gray-600 hover:text-gray-900 transition-colors">Campaigns</Link>
+              {userRole === 'user' && (
+                <Link to="/volunteer-opportunities" className="text-gray-600 hover:text-gray-900 transition-colors">Volunteer</Link>
+              )}
+              {userRole === 'user' && (
+                <Link to="/donate" className="text-gray-600 hover:text-gray-900 transition-colors">Donate</Link>
+              )}
+              <Link to="/chatbot" className="text-gray-600 hover:text-gray-900 transition-colors">Chatbot</Link>
+              {userRole === 'user' && (
+                <Link to="/insights" className="text-gray-600 hover:text-gray-900 transition-colors">Insights</Link>
+              )}
+              {isAuthenticated && userRole === 'ngo' && (
+                <Link to="/ngo/profile" className="text-gray-600 hover:text-gray-900 transition-colors">
+                  My NGO Profile
+                </Link>
               )}
             </div>
+          </div>
+          <div className="hidden md:flex items-center gap-3 text-sm font-medium">
+            {isAuthenticated ? (
+              <>
+                {userRole === 'admin' ? (
+                  <Link to="/admin" className="text-gray-600 hover:text-gray-900 transition-colors">Admin</Link>
+                ) : (
+                  <Link to="/dashboard" className="text-gray-600 hover:text-gray-900 transition-colors">Dashboard</Link>
+                )}
+                <button
+                  onClick={handleLogout}
+                  className="ml-2 text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" className="text-gray-600 hover:text-gray-900 transition-colors">Login</Link>
+                <Link to="/register" className="px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:border-gray-400 hover:text-gray-900 transition-colors">
+                  Register
+                </Link>
+              </>
+            )}
           </div>
           <div className="-mr-2 flex md:hidden">
             <button
               onClick={() => setIsOpen(!isOpen)}
               type="button"
-              className="bg-blue-600 inline-flex items-center justify-center p-2 rounded-md text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-blue-600 focus:ring-white"
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               aria-controls="mobile-menu"
               aria-expanded="false"
             >
@@ -102,29 +116,43 @@ export default function Navbar() {
 
       {isOpen && (
         <div className="md:hidden" id="mobile-menu">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            <Link to="/discover" className="text-gray-700 hover:bg-blue-500 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Discover NGOs</Link>
-            <Link to="/volunteer-campaigns" className="text-gray-700 hover:bg-blue-500 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Volunteer</Link>
-            <Link to="/donate" className="text-gray-700 hover:bg-blue-500 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Donate</Link>
-            <Link to="/insights" className="text-gray-700 hover:bg-blue-500 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Insights</Link>
-            <Link to="/campaigns" className="text-gray-700 hover:bg-blue-500 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Campaigns</Link>
-            <Link to="/chatbot" className="text-gray-700 hover:bg-blue-500 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Chatbot</Link>
-            {isAuthenticated && userRole === 'ngo' && <Link to="/ngo/profile" className="text-gray-700 hover:bg-blue-500 hover:text-white block px-3 py-2 rounded-md text-base font-medium">My NGO Profile</Link>}
-            {isAuthenticated && userRole === 'admin' && <Link to="/admin" className="text-gray-700 hover:bg-blue-500 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Admin Panel</Link>}
+          <div className="px-3 pt-3 pb-4 space-y-2">
+            <Link to="/discover" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">NGOs</Link>
+            <Link to="/map" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Map</Link>
+            <Link to="/campaigns" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Campaigns</Link>
+            {userRole === 'user' && (
+              <Link to="/volunteer-opportunities" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Volunteer</Link>
+            )}
+            {userRole === 'user' && (
+              <Link to="/donate" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Donate</Link>
+            )}
+            <Link to="/chatbot" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Chatbot</Link>
+            {userRole === 'user' && (
+              <Link to="/insights" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Insights</Link>
+            )}
+            {isAuthenticated && userRole === 'ngo' && (
+              <Link to="/ngo/profile" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">
+                My NGO Profile
+              </Link>
+            )}
             {isAuthenticated ? (
               <>
-                <Link to="/dashboard" className="text-gray-700 hover:bg-blue-500 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Dashboard</Link>
+                {userRole === 'admin' ? (
+                  <Link to="/admin" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Admin</Link>
+                ) : (
+                  <Link to="/dashboard" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Dashboard</Link>
+                )}
                 <button
                   onClick={handleLogout}
-                  className="w-full text-left text-gray-700 hover:bg-blue-500 hover:text-white block px-3 py-2 rounded-md text-base font-medium"
+                  className="w-full text-left text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium"
                 >
                   Logout
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" className="text-gray-700 hover:bg-blue-500 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Login</Link>
-                <Link to="/register" className="text-gray-700 hover:bg-blue-500 hover:text-white block px-3 py-2 rounded-md text-base font-medium">Register</Link>
+                <Link to="/login" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Login</Link>
+                <Link to="/register" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Register</Link>
               </>
             )}
           </div>

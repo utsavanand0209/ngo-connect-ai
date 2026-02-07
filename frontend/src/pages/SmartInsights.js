@@ -1,16 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAIRecommendations } from '../services/api';
+import { getUserRole } from '../utils/auth';
 
 export default function SmartInsights() {
   const [recommendations, setRecommendations] = useState({ ngos: [], campaigns: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const isAuthenticated = !!localStorage.getItem('token');
+  const role = getUserRole();
+  const isUser = role === 'user';
 
   useEffect(() => {
     if (!isAuthenticated) {
       setLoading(false);
+      return;
+    }
+    if (!isUser) {
+      setLoading(false);
+      setError('Smart Insights are available for user accounts only.');
       return;
     }
     setLoading(true);
@@ -18,7 +26,7 @@ export default function SmartInsights() {
       .then(res => setRecommendations(res.data))
       .catch(() => setError('Failed to load smart insights.'))
       .finally(() => setLoading(false));
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isUser]);
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
@@ -49,6 +57,16 @@ export default function SmartInsights() {
               </Link>
             </div>
           </div>
+        ) : !isUser ? (
+          <div className="bg-white rounded-xl shadow p-8 text-center">
+            <h2 className="text-2xl font-bold text-gray-900">User accounts only</h2>
+            <p className="text-gray-600 mt-2">Smart Insights are available for beneficiaries. Please login as a user to access recommendations.</p>
+            <div className="mt-4">
+              <Link to="/dashboard" className="px-4 py-2 rounded-lg bg-gray-900 text-white font-semibold hover:bg-gray-800">
+                Back to Dashboard
+              </Link>
+            </div>
+          </div>
         ) : loading ? (
           <div className="text-center py-12">Loading insights...</div>
         ) : error ? (
@@ -62,11 +80,19 @@ export default function SmartInsights() {
               ) : (
                 <div className="space-y-4">
                   {recommendations.ngos.slice(0, 3).map(item => (
-                    <div key={item.ngo._id} className="border rounded-lg p-4">
+                    <div key={item.ngo.id} className="border rounded-lg p-4">
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="font-semibold text-gray-900">{item.ngo.name}</h3>
-                          <p className="text-sm text-gray-500">{item.ngo.category || 'NGO'} · {item.ngo.location || 'Location TBD'}</p>
+                          <p className="text-sm text-gray-500">
+                            {(item.ngo.categories && item.ngo.categories.length > 0 ? item.ngo.categories : [item.ngo.category].filter(Boolean)).join(', ') || 'NGO'}
+                            {' · '}
+                            {
+                              item.ngo.location && typeof item.ngo.location === 'object' && item.ngo.location.type === 'Point' && Array.isArray(item.ngo.location.coordinates)
+                                ? `Coordinates: ${item.ngo.location.coordinates.join(', ')}`
+                                : item.ngo.location || 'Location not specified'
+                            }
+                          </p>
                         </div>
                         <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">{Math.min(Math.round((item.score || 0) * 10), 99)}% match</span>
                       </div>
@@ -78,7 +104,7 @@ export default function SmartInsights() {
                         </div>
                       )}
                       <div className="mt-3">
-                        <Link to={`/ngos/${item.ngo._id}`} className="text-indigo-600 font-semibold hover:underline">
+                        <Link to={`/ngos/${item.ngo.id}`} className="text-indigo-600 font-semibold hover:underline">
                           View NGO
                         </Link>
                       </div>
@@ -101,7 +127,7 @@ export default function SmartInsights() {
                       ? Math.min((campaign.currentAmount / campaign.goalAmount) * 100, 100)
                       : 0;
                     return (
-                      <div key={campaign._id} className="border rounded-lg p-4">
+                      <div key={campaign.id} className="border rounded-lg p-4">
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-semibold text-gray-900">{campaign.title}</h3>
@@ -125,7 +151,7 @@ export default function SmartInsights() {
                           </p>
                         )}
                         <div className="mt-3">
-                          <Link to={`/campaigns/${campaign._id}`} className="text-green-600 font-semibold hover:underline">
+                          <Link to={`/campaigns/${campaign.id}`} className="text-green-600 font-semibold hover:underline">
                             View Campaign
                           </Link>
                         </div>

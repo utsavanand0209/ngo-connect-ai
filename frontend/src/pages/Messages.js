@@ -11,7 +11,7 @@ export default function Messages() {
       <h1 className="text-2xl font-bold">Messages</h1>
       <div className="mt-6 space-y-4">
         {messages.map(m => (
-          <div key={m._id} className="p-4 bg-white rounded shadow">
+          <div key={m.id} className="p-4 bg-white rounded shadow">
             <p><b>From:</b> {m.from?.name} ({m.from?.email})</p>
             <p>{m.body}</p>
           </div>

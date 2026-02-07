@@ -1,11 +1,11 @@
-const mongoose = require('mongoose');
+const { createModel } = require('../db/modelFactory');
 
-const NotificationSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  message: { type: String, required: true },
-  audience: { type: String, enum: ['all', 'users', 'ngos'], default: 'all' },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  createdAt: { type: Date, default: Date.now }
+module.exports = createModel({
+  modelName: 'Notification',
+  tableName: 'notifications_rel',
+  docColumn: 'source_doc',
+  externalIdColumn: 'external_id',
+  refs: {
+    createdBy: 'User'
+  }
 });
-
-module.exports = mongoose.model('Notification', NotificationSchema);

@@ -1,9 +1,15 @@
-const mongoose = require('mongoose');
-const DonationSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  ngo: { type: mongoose.Schema.Types.ObjectId, ref: 'NGO' },
-  campaign: { type: mongoose.Schema.Types.ObjectId, ref: 'Campaign' },
-  amount: Number,
-  createdAt: { type: Date, default: Date.now }
+const { createModel } = require('../db/modelFactory');
+
+module.exports = createModel({
+  modelName: 'Donation',
+  tableName: 'donations_rel',
+  docColumn: 'source_doc',
+  externalIdColumn: 'external_id',
+  refs: {
+    user: 'User',
+    ngo: 'NGO',
+    campaign: 'Campaign',
+    certificate: 'Certificate',
+    certificateApprovedBy: 'NGO'
+  }
 });
-module.exports = mongoose.model('Donation', DonationSchema);

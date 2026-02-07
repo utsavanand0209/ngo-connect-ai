@@ -1,24 +1,12 @@
-const mongoose = require('mongoose');
+const { createModel } = require('../db/modelFactory');
 
-const VolunteerOpportunitySchema = new mongoose.Schema({
-  ngo: { type: mongoose.Schema.Types.ObjectId, ref: 'NGO', required: true },
-  title: { type: String, required: true },
-  description: { type: String, required: true },
-  location: String,
-  skills: [String],
-  commitment: {
-    type: String,
-    enum: ['One-time', 'Weekly', 'Monthly', 'Flexible'],
-    default: 'Flexible'
-  },
-  dateRange: {
-    startDate: Date,
-    endDate: Date
-  },
-  spots: { type: Number, default: 10 },
-  applicants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  createdAt: { type: Date, default: Date.now }
+module.exports = createModel({
+  modelName: 'VolunteerOpportunity',
+  tableName: 'volunteer_opportunities_rel',
+  docColumn: 'source_doc',
+  externalIdColumn: 'external_id',
+  refs: {
+    ngo: 'NGO',
+    applicants: 'User'
+  }
 });
-
-module.exports = mongoose.model('VolunteerOpportunity', VolunteerOpportunitySchema);
-
