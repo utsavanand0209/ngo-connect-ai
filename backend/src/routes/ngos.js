@@ -14,6 +14,13 @@ const mapRowDoc = (row) => {
   return doc;
 };
 
+const sanitizeNgo = (ngo) => {
+  if (!ngo) return ngo;
+  const doc = ngo && typeof ngo.toObject === 'function' ? ngo.toObject() : { ...(ngo || {}) };
+  delete doc.password;
+  return doc;
+};
+
 // Public list verified NGOs + search by category/location
 router.get('/', async (req, res) => {
   try {
@@ -97,7 +104,7 @@ router.get('/', async (req, res) => {
       values
     );
 
-    const ngos = rows.map((row) => mapRowDoc(row));
+    const ngos = rows.map((row) => sanitizeNgo(mapRowDoc(row)));
     res.json(ngos);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -107,14 +114,11 @@ router.get('/', async (req, res) => {
 // NGO get their own profile
 router.get('/me', auth(['ngo']), async (req, res) => {
   try {
-    console.log('User in /ngos/me:', req.user);
-    const ngo = await NGO.findById(req.user.id);
-    console.log('NGO found:', ngo);
-    if (!ngo) return res.status(404).json({ message: 'NGO not found', ngo: null });
+    const ngo = await NGO.findById(req.user.id).select('-password');
+    if (!ngo) return res.status(404).json({ message: 'NGO not found' });
     res.json(ngo);
   } catch (err) {
-    console.error('Error in /ngos/me:', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -128,7 +132,7 @@ router.post('/:id/flag', auth(['admin']), async (req, res) => {
       { new: true }
     );
     if (!ngo) return res.status(404).json({ message: 'NGO not found' });
-    res.json({ message: 'NGO flagged', ngo });
+    res.json({ message: 'NGO flagged', ngo: sanitizeNgo(ngo) });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -200,7 +204,7 @@ router.put('/me', auth(['ngo']), async (req, res) => {
       payload.address = address || payload.address;
     }
     const ngo = await NGO.findByIdAndUpdate(req.user.id, payload, { new: true });
-    res.json(ngo);
+    res.json(sanitizeNgo(ngo));
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -217,7 +221,7 @@ router.post('/me/verify', auth(['ngo']), upload.array('docs', 5), async (req, re
     ngo.verificationDocs = [...existingDocs, ...paths];
     await ngo.save();
 
-    res.json({ message: 'Documents uploaded', ngo });
+    res.json({ message: 'Documents uploaded', ngo: sanitizeNgo(ngo) });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -226,7 +230,7 @@ router.post('/me/verify', auth(['ngo']), upload.array('docs', 5), async (req, re
 // NGO profile (public if verified)
 router.get('/:id', async (req, res) => {
   try {
-    const ngo = await NGO.findById(req.params.id);
+    const ngo = await NGO.findById(req.params.id).select('-password');
     if (!ngo) return res.status(404).json({ message: 'Not found' });
     if (!ngo.verified) return res.status(403).json({ message: 'NGO not verified' });
     if (ngo.isActive === false) return res.status(403).json({ message: 'NGO not active' });
