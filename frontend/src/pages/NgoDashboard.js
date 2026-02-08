@@ -5,11 +5,13 @@ import api, {
   getMessageConversations,
   getNgoDonationApprovalQueue,
   getNgoDonationTransactions,
+  getNgoHelpRequests,
   reviewCampaignVolunteerRegistration,
   getNgoVolunteerApprovalQueue,
   getNgoVolunteerRequests,
   reviewDonationCertificateRequest,
-  reviewVolunteerCertificateRequest
+  reviewVolunteerCertificateRequest,
+  updateHelpRequestStatus
 } from '../services/api';
 
 const currency = (value) => `Rs ${Number(value || 0).toLocaleString('en-IN')}`;
@@ -58,6 +60,14 @@ export default function NgoDashboard() {
 
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
 
+  const [helpRequests, setHelpRequests] = useState([]);
+  const [helpRequestsLoading, setHelpRequestsLoading] = useState(true);
+  const [helpRequestsMessage, setHelpRequestsMessage] = useState('');
+  const [helpRequestQuery, setHelpRequestQuery] = useState('');
+  const [helpRequestStatusFilter, setHelpRequestStatusFilter] = useState('all');
+  const [helpRequestActionState, setHelpRequestActionState] = useState({});
+  const [selectedHelpRequest, setSelectedHelpRequest] = useState(null);
+
   const volunteerSignupTotal = useMemo(
     () => Number(volunteerSummary.totalRequests || 0) + Number(campaignVolunteerSummary.totalVolunteers || 0),
     [volunteerSummary, campaignVolunteerSummary]
@@ -70,6 +80,58 @@ export default function NgoDashboard() {
       Number(campaignVolunteerSummary.pendingCertificateCount || 0),
     [donationSummary, volunteerSummary, campaignVolunteerSummary]
   );
+
+  const supportRequestSummary = useMemo(() => {
+    const summary = {
+      total: 0,
+      pending: 0,
+      approved: 0,
+      inProgress: 0,
+      completed: 0,
+      rejected: 0
+    };
+
+    const normalize = (value) => String(value || '').trim().toLowerCase();
+
+    for (const req of helpRequests || []) {
+      summary.total += 1;
+      const status = normalize(req?.status || 'Pending');
+      if (status === 'pending') summary.pending += 1;
+      else if (status === 'approved') summary.approved += 1;
+      else if (status === 'in progress') summary.inProgress += 1;
+      else if (status === 'completed') summary.completed += 1;
+      else if (status === 'rejected') summary.rejected += 1;
+    }
+
+    return summary;
+  }, [helpRequests]);
+
+  const filteredHelpRequests = useMemo(() => {
+    const q = helpRequestQuery.trim().toLowerCase();
+    const filter = String(helpRequestStatusFilter || 'all').trim().toLowerCase();
+
+    const rows = (helpRequests || []).filter((req) => {
+      const status = String(req?.status || 'Pending').trim().toLowerCase();
+      if (filter !== 'all' && status !== filter) return false;
+
+      if (!q) return true;
+      const hay = [
+        req?.name,
+        req?.helpType,
+        req?.location,
+        req?.mobileNumber,
+        req?.user?.name,
+        req?.user?.email,
+        req?.description
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(q);
+    });
+
+    return [...rows].sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0));
+  }, [helpRequests, helpRequestQuery, helpRequestStatusFilter]);
 
   const isVerified = ngo?.verified;
 
@@ -144,9 +206,45 @@ export default function NgoDashboard() {
     }
   };
 
+  const loadHelpRequests = async ({ silent = false } = {}) => {
+    if (!silent) setHelpRequestsLoading(true);
+    setHelpRequestsMessage('');
+    try {
+      const res = await getNgoHelpRequests();
+      setHelpRequests(res.data || []);
+    } catch (err) {
+      setHelpRequests([]);
+      setHelpRequestsMessage(err.response?.data?.message || 'Unable to load support requests right now.');
+    } finally {
+      setHelpRequestsLoading(false);
+    }
+  };
+
+  const setHelpRequestBusy = (id, busy) => {
+    if (!id) return;
+    setHelpRequestActionState((prev) => ({ ...prev, [id]: busy }));
+  };
+
+  const handleHelpRequestStatusUpdate = async (requestId, status) => {
+    if (!requestId) return;
+    setHelpRequestsMessage('');
+    setHelpRequestBusy(requestId, true);
+    try {
+      await updateHelpRequestStatus(requestId, status);
+      setHelpRequests((prev) =>
+        (prev || []).map((item) => (item.id === requestId ? { ...item, status } : item))
+      );
+    } catch (err) {
+      setHelpRequestsMessage(err.response?.data?.message || 'Failed to update support request status.');
+    } finally {
+      setHelpRequestBusy(requestId, false);
+    }
+  };
+
   useEffect(() => {
     loadDashboardData();
     loadApprovals();
+    loadHelpRequests();
   }, []);
 
   const handleApprovalNoteChange = (key, value) => {
@@ -227,7 +325,7 @@ export default function NgoDashboard() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
             <div className="rounded-lg border border-gray-200 p-4">
               <p className="text-sm text-gray-500">Total Donation Amount</p>
               <p className="text-xl font-bold text-gray-900 mt-1">{currency(donationSummary.totalCompletedAmount)}</p>
@@ -248,6 +346,11 @@ export default function NgoDashboard() {
               <p className="text-sm text-gray-500">Unread Messages</p>
               <p className="text-xl font-bold text-gray-900 mt-1">{messageUnreadCount}</p>
               <Link to="/messages" className="inline-block mt-2 text-sm text-indigo-600 hover:underline">Open Inbox</Link>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4">
+              <p className="text-sm text-gray-500">Support Requests</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">{supportRequestSummary.pending}</p>
+              <p className="text-xs text-gray-500 mt-1">{supportRequestSummary.total} total</p>
             </div>
           </div>
         </header>
@@ -381,6 +484,199 @@ export default function NgoDashboard() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Support Requests Inbox</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Requests submitted by beneficiaries. Update the status as your team responds.
+              </p>
+              <p className="text-xs text-gray-500 mt-2">
+                Pending: {supportRequestSummary.pending} • Approved: {supportRequestSummary.approved} • In progress: {supportRequestSummary.inProgress} • Completed: {supportRequestSummary.completed}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadHelpRequests()}
+              className="px-3 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+            >
+              Refresh Requests
+            </button>
+          </div>
+
+          {helpRequestsMessage && (
+            <div className="mt-4 p-3 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-800 text-sm">
+              {helpRequestsMessage}
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-col md:flex-row gap-3 md:items-center">
+            <input
+              value={helpRequestQuery}
+              onChange={(e) => setHelpRequestQuery(e.target.value)}
+              placeholder="Search by name, help type, location, phone…"
+              className="w-full md:w-96 px-3 py-2 rounded-lg border border-gray-200 text-sm"
+            />
+            <select
+              value={helpRequestStatusFilter}
+              onChange={(e) => setHelpRequestStatusFilter(e.target.value)}
+              className="w-full md:w-60 px-3 py-2 rounded-lg border border-gray-200 text-sm"
+            >
+              <option value="all">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="in progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+
+          {helpRequestsLoading ? (
+            <p className="mt-4 text-gray-600">Loading support requests...</p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 text-gray-700">
+                  <tr>
+                    <th className="text-left px-3 py-2">Submitted</th>
+                    <th className="text-left px-3 py-2">Requester</th>
+                    <th className="text-left px-3 py-2">Help</th>
+                    <th className="text-left px-3 py-2">Location</th>
+                    <th className="text-left px-3 py-2">Status</th>
+                    <th className="text-left px-3 py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredHelpRequests.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-3 py-6 text-center text-gray-500">
+                        No support requests found for this filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredHelpRequests.slice(0, 30).map((item) => {
+                      const rawStatus = String(item.status || 'Pending');
+                      const status = rawStatus.trim().toLowerCase();
+                      const busy = Boolean(helpRequestActionState[item.id]);
+                      const badgeClass = status === 'completed'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : status === 'rejected'
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : status === 'in progress'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : status === 'approved'
+                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-200';
+
+                      return (
+                        <tr key={item.id} className="border-t border-gray-100">
+                          <td className="px-3 py-2 text-gray-700">{when(item.createdAt)}</td>
+                          <td className="px-3 py-2 text-gray-800">
+                            <p className="font-medium">{item.user?.name || item.name || 'Requester'}</p>
+                            <p className="text-xs text-gray-500">{item.user?.email || '-'}</p>
+                            <p className="text-xs text-gray-500">{item.mobileNumber || item.user?.mobileNumber || '-'}</p>
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">
+                            <p className="font-medium">{item.helpType || '-'}</p>
+                            {item.description && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                {String(item.description).length > 90 ? `${String(item.description).slice(0, 90)}…` : item.description}
+                              </p>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedHelpRequest(item)}
+                              className="mt-2 text-xs font-semibold text-indigo-600 hover:underline"
+                            >
+                              View details
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">{item.location || '-'}</td>
+                          <td className="px-3 py-2 text-gray-700">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${badgeClass}`}>
+                              {rawStatus}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">
+                            <div className="flex flex-wrap items-center gap-2 min-w-[220px]">
+                              {status === 'pending' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleHelpRequestStatusUpdate(item.id, 'Approved')}
+                                    disabled={busy}
+                                    className="px-3 py-2 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-60"
+                                  >
+                                    {busy ? 'Updating…' : 'Approve'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleHelpRequestStatusUpdate(item.id, 'Rejected')}
+                                    disabled={busy}
+                                    className="px-3 py-2 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-60"
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+
+                              {status === 'approved' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleHelpRequestStatusUpdate(item.id, 'In Progress')}
+                                    disabled={busy}
+                                    className="px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-60"
+                                  >
+                                    {busy ? 'Updating…' : 'Start'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleHelpRequestStatusUpdate(item.id, 'Rejected')}
+                                    disabled={busy}
+                                    className="px-3 py-2 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-60"
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+
+                              {status === 'in progress' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleHelpRequestStatusUpdate(item.id, 'Completed')}
+                                    disabled={busy}
+                                    className="px-3 py-2 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-60"
+                                  >
+                                    {busy ? 'Updating…' : 'Complete'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleHelpRequestStatusUpdate(item.id, 'Rejected')}
+                                    disabled={busy}
+                                    className="px-3 py-2 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-60"
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+
+                              {(status === 'completed' || status === 'rejected') && (
+                                <span className="text-xs text-gray-400">No actions</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           )}
         </section>
@@ -627,6 +923,64 @@ export default function NgoDashboard() {
             <Link to="/messages" className="px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 font-medium text-gray-800">Open Messages</Link>
           </div>
         </section>
+
+        {selectedHelpRequest && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <div className="p-5 border-b flex items-center justify-between">
+                <h3 className="text-lg font-bold text-gray-900">Support Request Details</h3>
+                <button
+                  type="button"
+                  onClick={() => setSelectedHelpRequest(null)}
+                  className="text-sm font-semibold text-gray-600 hover:text-gray-900"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500">Submitted</p>
+                    <p className="font-semibold text-gray-900">{when(selectedHelpRequest.createdAt)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Status</p>
+                    <p className="font-semibold text-gray-900">{selectedHelpRequest.status || 'Pending'}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">Requester</p>
+                  <p className="font-semibold text-gray-900 mt-1">
+                    {selectedHelpRequest.user?.name || selectedHelpRequest.name || 'Requester'}
+                  </p>
+                  <p className="text-sm text-gray-700 mt-1">{selectedHelpRequest.user?.email || '-'}</p>
+                  <p className="text-sm text-gray-700 mt-1">{selectedHelpRequest.mobileNumber || selectedHelpRequest.user?.mobileNumber || '-'}</p>
+                  {selectedHelpRequest.age !== null && selectedHelpRequest.age !== undefined && selectedHelpRequest.age !== '' && (
+                    <p className="text-sm text-gray-700 mt-1">Age: {selectedHelpRequest.age}</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-sm text-gray-500">Help Type</p>
+                    <p className="font-semibold text-gray-900 mt-1">{selectedHelpRequest.helpType || '-'}</p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-sm text-gray-500">Location</p>
+                    <p className="font-semibold text-gray-900 mt-1">{selectedHelpRequest.location || '-'}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">Description</p>
+                  <p className="text-gray-800 mt-2 whitespace-pre-wrap">{selectedHelpRequest.description || 'No description provided.'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

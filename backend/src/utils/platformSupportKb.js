@@ -83,6 +83,27 @@ const SUPPORT_KB = [
     ].join('\n')
   },
   {
+    id: 'support_requests',
+    title: 'Request Support (Help Requests)',
+    keywords: ['request support', 'support request', 'help request', 'request help', 'beneficiary request', 'need help'],
+    content: [
+      'Support Requests let users ask a specific NGO for help and track progress.',
+      '',
+      'User flow:',
+      '- User Dashboard -> Request Support.',
+      '- Select an NGO, enter the help type and optional details, then submit.',
+      '- Track status updates as the NGO reviews your request.',
+      '',
+      'NGO flow:',
+      '- NGO Dashboard -> Support Requests Inbox.',
+      '- Review incoming requests and update status: Pending -> Approved -> In Progress -> Completed / Rejected.',
+      '',
+      'Admin:',
+      '- Admin Dashboard shows totals + recent support requests.',
+      '- Full list is available under Admin -> Support Requests.'
+    ].join('\n')
+  },
+  {
     id: 'status_glossary',
     title: 'Status Glossary',
     keywords: ['pending', 'approved', 'rejected', 'completed', 'assigned', 'applied', 'status', 'meaning'],
@@ -127,6 +148,7 @@ const SUPPORT_KB = [
       '- Donation certificate approval queue.',
       '- Volunteer certificate approval queue (volunteer opportunities).',
       '- Campaign volunteer registrations + approvals (campaign volunteering).',
+      '- Support Requests inbox (beneficiary help requests + status updates).',
       '- Messages and unread count.'
     ].join('\n')
   },
@@ -138,7 +160,8 @@ const SUPPORT_KB = [
       'Admin capabilities:',
       '- Verify/disable NGOs.',
       '- Review flagged campaigns or requests.',
-      '- View admin dashboard metrics (donations, volunteers, recent activity).'
+      '- View admin dashboard metrics (donations, volunteers, recent activity).',
+      '- Track support requests submitted to NGOs.'
     ].join('\n')
   },
   {

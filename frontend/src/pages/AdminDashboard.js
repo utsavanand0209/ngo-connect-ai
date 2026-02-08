@@ -267,6 +267,14 @@ export default function AdminDashboard() {
   const donationSeries = snapshot?.series?.donations || [];
   const volunteerSeries = snapshot?.series?.volunteerApplications || [];
   const generatedAt = snapshot?.generatedAt || null;
+  const supportRequestsSummary = snapshot?.supportRequestsSummary || {
+    pendingCount: 0,
+    approvedCount: 0,
+    inProgressCount: 0,
+    completedCount: 0,
+    rejectedCount: 0
+  };
+  const supportRequests = snapshot?.supportRequests || [];
 
   const openServerRenderedView = async () => {
     setError('');
@@ -777,6 +785,76 @@ export default function AdminDashboard() {
                       <td className="px-3 py-2 text-slate-700">{textOrDash(application.certificateApprovalStatus)}</td>
                     </tr>
                   ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-extrabold text-slate-900">Support Requests</h2>
+              <p className="text-sm text-slate-600 mt-1">Recent beneficiary requests routed to NGOs.</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Pending: {formatCount(supportRequestsSummary.pendingCount)} • In progress: {formatCount(supportRequestsSummary.inProgressCount)} • Completed: {formatCount(supportRequestsSummary.completedCount)}
+              </p>
+            </div>
+            <Link to="/admin/requests" className="text-sm font-semibold text-slate-900 hover:underline">
+              Open
+            </Link>
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-slate-700">
+                <tr>
+                  <th className="text-left px-3 py-2">Submitted</th>
+                  <th className="text-left px-3 py-2">Requester</th>
+                  <th className="text-left px-3 py-2">NGO</th>
+                  <th className="text-left px-3 py-2">Help</th>
+                  <th className="text-left px-3 py-2">Location</th>
+                  <th className="text-left px-3 py-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {supportRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                      {loading ? 'Loading support requests…' : 'No support requests found.'}
+                    </td>
+                  </tr>
+                ) : (
+                  supportRequests.slice(0, 10).map((req) => {
+                    const rawStatus = String(req.status || 'Pending');
+                    const status = rawStatus.trim().toLowerCase();
+                    const badgeClass = status === 'completed'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : status === 'rejected'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : status === 'in progress'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : status === 'approved'
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200';
+                    return (
+                      <tr key={req.id} className="border-t border-slate-100">
+                        <td className="px-3 py-2 text-slate-700">{when(req.createdAt)}</td>
+                        <td className="px-3 py-2 text-slate-900">
+                          <p className="font-semibold">{req.user?.name || req.name || 'Requester'}</p>
+                          <p className="text-xs text-slate-500">{req.mobileNumber || req.user?.mobileNumber || '-'}</p>
+                        </td>
+                        <td className="px-3 py-2 text-slate-700">{req.ngo?.name || '-'}</td>
+                        <td className="px-3 py-2 text-slate-700">{req.helpType || '-'}</td>
+                        <td className="px-3 py-2 text-slate-700">{req.location || '-'}</td>
+                        <td className="px-3 py-2 text-slate-700">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${badgeClass}`}>
+                            {rawStatus}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

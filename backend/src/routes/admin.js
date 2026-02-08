@@ -68,7 +68,9 @@ const computeAdminDashboardSnapshot = async ({ limit, days }) => {
     { rows: campaignVolunteerRows = [] },
     { rows: pendingNgoRows = [] },
     { rows: flaggedNgoRows = [] },
-    { rows: flaggedCampaignRows = [] }
+    { rows: flaggedCampaignRows = [] },
+    { rows: supportRequestRows = [] },
+    { rows: [supportRequestStatusRow = {}] }
   ] = await Promise.all([
     query(
       `
@@ -310,6 +312,58 @@ const computeAdminDashboardSnapshot = async ({ limit, days }) => {
       LIMIT $1
       `,
       [Math.min(limit, 10)]
+    ),
+    query(
+      `
+      SELECT
+        h.external_id AS request_id,
+        h.source_doc AS request_doc,
+        h.created_at AS request_created_at,
+        u.external_id AS user_id,
+        u.source_doc AS user_doc,
+        ngo.external_id AS ngo_id,
+        ngo.source_doc AS ngo_doc
+      FROM help_requests_rel h
+      CROSS JOIN LATERAL (
+        SELECT
+          CASE
+            WHEN jsonb_typeof(h.source_doc->'user') = 'string' THEN NULLIF(h.source_doc->>'user', '')
+            WHEN jsonb_typeof(h.source_doc->'user') = 'object' THEN NULLIF(h.source_doc#>>'{user,id}', '')
+            ELSE NULL
+          END AS user_ref,
+          CASE
+            WHEN jsonb_typeof(h.source_doc->'ngo') = 'string' THEN NULLIF(h.source_doc->>'ngo', '')
+            WHEN jsonb_typeof(h.source_doc->'ngo') = 'object' THEN NULLIF(h.source_doc#>>'{ngo,id}', '')
+            ELSE NULL
+          END AS ngo_ref
+      ) refs
+      LEFT JOIN users_rel u ON u.external_id = refs.user_ref
+      LEFT JOIN ngos_rel ngo ON ngo.external_id = refs.ngo_ref
+      ORDER BY h.created_at DESC
+      LIMIT $1
+      `,
+      [Math.min(limit, 20)]
+    ),
+    query(
+      `
+      SELECT
+        COUNT(*) FILTER (
+          WHERE LOWER(COALESCE(NULLIF(source_doc->>'status', ''), 'Pending')) = 'pending'
+        ) AS pending_count,
+        COUNT(*) FILTER (
+          WHERE LOWER(COALESCE(NULLIF(source_doc->>'status', ''), 'Pending')) = 'approved'
+        ) AS approved_count,
+        COUNT(*) FILTER (
+          WHERE LOWER(COALESCE(NULLIF(source_doc->>'status', ''), 'Pending')) = 'in progress'
+        ) AS in_progress_count,
+        COUNT(*) FILTER (
+          WHERE LOWER(COALESCE(NULLIF(source_doc->>'status', ''), 'Pending')) = 'completed'
+        ) AS completed_count,
+        COUNT(*) FILTER (
+          WHERE LOWER(COALESCE(NULLIF(source_doc->>'status', ''), 'Pending')) = 'rejected'
+        ) AS rejected_count
+      FROM help_requests_rel
+      `
     )
   ]);
 
@@ -492,6 +546,54 @@ const computeAdminDashboardSnapshot = async ({ limit, days }) => {
     };
   });
 
+  const supportRequestsSummary = {
+    pendingCount: Number(supportRequestStatusRow.pending_count || 0),
+    approvedCount: Number(supportRequestStatusRow.approved_count || 0),
+    inProgressCount: Number(supportRequestStatusRow.in_progress_count || 0),
+    completedCount: Number(supportRequestStatusRow.completed_count || 0),
+    rejectedCount: Number(supportRequestStatusRow.rejected_count || 0)
+  };
+
+  const supportRequests = supportRequestRows.map((row) => {
+    const request = toDoc(row, 'request_id', 'request_doc');
+    request.createdAt = request.createdAt || row.request_created_at;
+
+    const user = row.user_doc ? toDoc(row, 'user_id', 'user_doc') : null;
+    const ngo = row.ngo_doc ? toDoc(row, 'ngo_id', 'ngo_doc') : null;
+
+    return {
+      id: request.id,
+      name: request.name,
+      age: request.age ?? null,
+      location: request.location,
+      helpType: request.helpType || request.help_type || '',
+      description: request.description || '',
+      mobileNumber: request.mobileNumber,
+      status: request.status || 'Pending',
+      createdAt: request.createdAt,
+      user: user
+        ? {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          mobileNumber: user.mobileNumber
+        }
+        : null,
+      ngo: ngo
+        ? {
+          id: ngo.id,
+          name: ngo.name,
+          verified: ngo.verified,
+          isActive: ngo.isActive,
+          helplineNumber: ngo.helplineNumber,
+          location: ngo.location,
+          category: ngo.category,
+          categories: ngo.categories || []
+        }
+        : null
+    };
+  });
+
   return {
     generatedAt: new Date().toISOString(),
     days,
@@ -548,7 +650,9 @@ const computeAdminDashboardSnapshot = async ({ limit, days }) => {
     campaigns,
     donations,
     volunteerApplications,
-    campaignVolunteerRegistrations
+    campaignVolunteerRegistrations,
+    supportRequestsSummary,
+    supportRequests
   };
 };
 

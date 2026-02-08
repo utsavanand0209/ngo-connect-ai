@@ -96,6 +96,9 @@ export default function UserDashboard() {
   });
   const [helpMessage, setHelpMessage] = useState('');
   const [helpLoading, setHelpLoading] = useState(false);
+  const [helpRefreshing, setHelpRefreshing] = useState(false);
+  const [helpQuery, setHelpQuery] = useState('');
+  const [helpStatusFilter, setHelpStatusFilter] = useState('all');
 
   const [donationsHistory, setDonationsHistory] = useState([]);
   const [donationsLoading, setDonationsLoading] = useState(true);
@@ -243,6 +246,20 @@ export default function UserDashboard() {
     setHelpLoading(false);
   };
 
+  const refreshHelpRequests = async () => {
+    setHelpRefreshing(true);
+    setHelpMessage('');
+    try {
+      const res = await getMyHelpRequests();
+      setHelpRequests(res.data || []);
+    } catch (err) {
+      setHelpRequests([]);
+      setHelpMessage('Unable to load support requests right now.');
+    } finally {
+      setHelpRefreshing(false);
+    }
+  };
+
   const handleGetRecommendations = () => {
     if (hasPreferences) {
       navigate('/recommendations');
@@ -312,6 +329,30 @@ export default function UserDashboard() {
 
     return items;
   }, [volunteerHistory, volunteerSearch, volunteerSort, volunteerStatusFilter]);
+
+  const filteredHelpRequests = useMemo(() => {
+    const q = helpQuery.trim().toLowerCase();
+    const status = String(helpStatusFilter || 'all').trim().toLowerCase();
+
+    const rows = (helpRequests || []).filter((request) => {
+      const rawStatus = String(request?.status || 'Pending').trim().toLowerCase();
+      if (status !== 'all' && rawStatus !== status) return false;
+      if (!q) return true;
+      const hay = [
+        request?.ngo?.name,
+        request?.helpType,
+        request?.location,
+        request?.description,
+        request?.status
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(q);
+    });
+
+    return [...rows].sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0));
+  }, [helpRequests, helpQuery, helpStatusFilter]);
 
   const historyTrendData = useMemo(() => {
     const buckets = new Map();
@@ -909,98 +950,174 @@ export default function UserDashboard() {
         </section>
 
         <section className="bg-white rounded-lg shadow-lg p-8 mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Request Support</h2>
-          <p className="text-gray-600 mb-6">Submit a help request to an NGO and track the status here.</p>
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Request Support</h2>
+              <p className="text-gray-600">Submit a help request to a selected NGO and track the status here.</p>
+            </div>
+            <button
+              type="button"
+              onClick={refreshHelpRequests}
+              disabled={helpRefreshing}
+              className="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 disabled:opacity-60"
+            >
+              {helpRefreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
+
           {helpMessage && (
-            <div className="mb-4 p-3 rounded bg-blue-50 border border-blue-200 text-blue-800">
+            <div className="mt-4 p-3 rounded bg-blue-50 border border-blue-200 text-blue-800">
               {helpMessage}
             </div>
           )}
-          <form onSubmit={submitHelpRequest} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Select NGO *</label>
-              <select
-                value={helpForm.ngoId}
-                onChange={(e) => setHelpForm((prev) => ({ ...prev, ngoId: e.target.value }))}
-                className="mt-1 w-full p-3 border border-gray-300 rounded-lg"
-                required
-              >
-                <option value="" disabled>Select an NGO</option>
-                {availableNgos.map((ngo) => (
-                  <option key={ngo.id} value={ngo.id}>{ngo.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Age</label>
-              <input
-                type="number"
-                value={helpForm.age}
-                onChange={(e) => setHelpForm((prev) => ({ ...prev, age: e.target.value }))}
-                className="mt-1 w-full p-3 border border-gray-300 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Location</label>
-              <input
-                type="text"
-                value={helpForm.location}
-                onChange={(e) => setHelpForm((prev) => ({ ...prev, location: e.target.value }))}
-                className="mt-1 w-full p-3 border border-gray-300 rounded-lg"
-                placeholder="City, State"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Type of Help Required *</label>
-              <input
-                type="text"
-                value={helpForm.helpType}
-                onChange={(e) => setHelpForm((prev) => ({ ...prev, helpType: e.target.value }))}
-                className="mt-1 w-full p-3 border border-gray-300 rounded-lg"
-                placeholder="Medical, Shelter, Food, etc."
-                required
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700">Description (optional)</label>
-              <textarea
-                value={helpForm.description}
-                onChange={(e) => setHelpForm((prev) => ({ ...prev, description: e.target.value }))}
-                className="mt-1 w-full p-3 border border-gray-300 rounded-lg"
-                rows={3}
-              />
-            </div>
-            <div className="md:col-span-2">
+
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <form onSubmit={submitHelpRequest} className="rounded-lg border border-gray-200 p-5 bg-gray-50">
+              <h3 className="text-lg font-semibold text-gray-900">Submit a Request</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Your mobile number from profile is shared with the NGO so they can contact you.
+              </p>
+
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">Select NGO *</label>
+                  <select
+                    value={helpForm.ngoId}
+                    onChange={(e) => setHelpForm((prev) => ({ ...prev, ngoId: e.target.value }))}
+                    className="mt-1 w-full p-3 border border-gray-300 rounded-lg bg-white"
+                    required
+                  >
+                    <option value="" disabled>Select an NGO</option>
+                    {availableNgos.map((ngo) => (
+                      <option key={ngo.id} value={ngo.id}>{ngo.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Age</label>
+                  <input
+                    type="number"
+                    value={helpForm.age}
+                    onChange={(e) => setHelpForm((prev) => ({ ...prev, age: e.target.value }))}
+                    className="mt-1 w-full p-3 border border-gray-300 rounded-lg bg-white"
+                    min={0}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Location</label>
+                  <input
+                    type="text"
+                    value={helpForm.location}
+                    onChange={(e) => setHelpForm((prev) => ({ ...prev, location: e.target.value }))}
+                    className="mt-1 w-full p-3 border border-gray-300 rounded-lg bg-white"
+                    placeholder="City, State"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">Type of Help Required *</label>
+                  <input
+                    type="text"
+                    value={helpForm.helpType}
+                    onChange={(e) => setHelpForm((prev) => ({ ...prev, helpType: e.target.value }))}
+                    className="mt-1 w-full p-3 border border-gray-300 rounded-lg bg-white"
+                    placeholder="Medical, shelter, food, legal, etc."
+                    required
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">Description (optional)</label>
+                  <textarea
+                    value={helpForm.description}
+                    onChange={(e) => setHelpForm((prev) => ({ ...prev, description: e.target.value }))}
+                    className="mt-1 w-full p-3 border border-gray-300 rounded-lg bg-white"
+                    rows={3}
+                    placeholder="Add any context that helps the NGO respond faster."
+                  />
+                </div>
+              </div>
+
               <button
                 type="submit"
                 disabled={helpLoading}
-                className="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400"
+                className="mt-4 w-full px-4 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400"
               >
-                {helpLoading ? 'Submitting...' : 'Submit Request'}
+                {helpLoading ? 'Submitting…' : 'Submit Request'}
               </button>
-            </div>
-          </form>
+            </form>
 
-          <div className="mt-8">
-            <h3 className="text-lg font-semibold text-gray-800 mb-3">Your Requests</h3>
-            {helpRequests.length === 0 ? (
-              <p className="text-gray-500">No requests submitted yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {helpRequests.map((request) => (
-                  <div key={request.id} className="border rounded-lg p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                    <div>
-                      <p className="font-semibold text-gray-800">{request.ngo?.name || 'NGO'}</p>
-                      <p className="text-sm text-gray-500">{request.helpType} • {request.location || 'Location not specified'}</p>
-                      <p className="text-xs text-gray-400">Submitted: {new Date(request.createdAt).toLocaleString()}</p>
-                    </div>
-                    <span className="px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-700">
-                      {request.status}
-                    </span>
-                  </div>
-                ))}
+            <div className="rounded-lg border border-gray-200 p-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Your Requests</h3>
+                  <p className="text-sm text-gray-600 mt-1">{helpRequests.length} total</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    value={helpQuery}
+                    onChange={(e) => setHelpQuery(e.target.value)}
+                    placeholder="Search requests…"
+                    className="px-3 py-2 rounded-lg border border-gray-200 text-sm w-full sm:w-56"
+                  />
+                  <select
+                    value={helpStatusFilter}
+                    onChange={(e) => setHelpStatusFilter(e.target.value)}
+                    className="px-3 py-2 rounded-lg border border-gray-200 text-sm w-full sm:w-44"
+                  >
+                    <option value="all">All statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="in progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
               </div>
-            )}
+
+              <div className="mt-4 space-y-3">
+                {filteredHelpRequests.length === 0 ? (
+                  <p className="text-gray-500">No requests found for this filter.</p>
+                ) : (
+                  filteredHelpRequests.map((request) => {
+                    const rawStatus = String(request.status || 'Pending');
+                    const status = rawStatus.trim().toLowerCase();
+                    const badgeClass = status === 'completed'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : status === 'rejected'
+                        ? 'bg-red-50 text-red-700 border-red-200'
+                        : status === 'in progress'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : status === 'approved'
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200';
+
+                    return (
+                      <div key={request.id} className="border rounded-lg p-4 flex flex-col gap-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-gray-900">{request.ngo?.name || 'NGO'}</p>
+                            <p className="text-sm text-gray-600 mt-0.5">{request.helpType || 'Support'}</p>
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${badgeClass}`}>
+                            {rawStatus}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">
+                          {request.location ? request.location : 'Location not specified'}
+                        </p>
+                        {request.ngo?.helplineNumber && (
+                          <p className="text-xs text-gray-500">Helpline: {request.ngo.helplineNumber}</p>
+                        )}
+                        <p className="text-xs text-gray-400">Submitted: {new Date(request.createdAt).toLocaleString()}</p>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         </section>
 

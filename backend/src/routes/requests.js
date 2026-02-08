@@ -30,7 +30,8 @@ router.post('/', auth(['user']), async (req, res) => {
       location,
       helpType,
       description,
-      mobileNumber: user.mobileNumber
+      mobileNumber: user.mobileNumber,
+      status: 'Pending'
     });
     const populated = await request.populate('ngo', 'name helplineNumber location category categories');
     res.json(populated);
