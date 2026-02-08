@@ -58,15 +58,17 @@ export default function CampaignList() {
   });
 
   const ProgressBar = ({ goal, current }) => {
-    const percentage = goal > 0 ? Math.min((current / goal) * 100, 100) : 0;
+    const goalValue = Number(goal) || 0;
+    const currentValue = Number(current) || 0;
+    const percentage = goalValue > 0 ? Math.min((currentValue / goalValue) * 100, 100) : 0;
     return (
       <div>
         <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
           <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
         </div>
         <div className="flex justify-between mt-1 text-sm font-medium">
-          <span className="text-indigo-700">₹{current.toLocaleString()} raised</span>
-          <span className="text-gray-500">of ₹{goal.toLocaleString()}</span>
+          <span className="text-indigo-700">₹{currentValue.toLocaleString()} raised</span>
+          <span className="text-gray-500">of ₹{goalValue.toLocaleString()}</span>
         </div>
       </div>
     );
