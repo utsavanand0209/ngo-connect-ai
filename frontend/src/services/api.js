@@ -110,6 +110,9 @@ export const sendMessageToNgo = (ngoId, body) => api.post(`/messages/to-ngo/${ng
 export const sendMessageToAllNgos = (body) => api.post('/messages/to-all-ngos', { body });
 export const sendMessageToUser = (userId, body) => api.post(`/messages/to-user/${userId}`, { body });
 
+// Admin dashboard
+export const getAdminDashboard = (params = {}) => api.get('/admin/dashboard', { params });
+
 // User preferences for AI recommendations
 export const getUserPreferences = () => api.get('/users/preferences');
 export const updateUserPreferences = (data) => api.put('/users/preferences', data);
