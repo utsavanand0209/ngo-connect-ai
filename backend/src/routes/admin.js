@@ -57,6 +57,11 @@ const toDateOrNull = (value) => {
 const DASHBOARD_SNAPSHOT_CACHE_TTL_MS = 1500;
 const dashboardSnapshotCache = new Map();
 
+const normalizeFlagRequestStatus = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  return raw || 'pending';
+};
+
 const computeAdminDashboardSnapshot = async ({ limit, days }) => {
   const [
     { rows: [statsRow = {}] },
@@ -769,11 +774,25 @@ router.put('/resolve-flag/:type/:id', auth(['admin']), async (req, res) => {
 router.get('/flag-requests', auth(['admin']), async (req, res) => {
   try {
     const { status, type } = req.query;
-    const filter = {};
-    if (status) filter.status = status;
-    if (type) filter.targetType = type;
-    const requests = await FlagRequest.find(filter).sort({ createdAt: -1 });
-    res.json(requests);
+    const statusFilter = status ? String(status).trim().toLowerCase() : '';
+    const typeFilter = type ? String(type).trim().toLowerCase() : '';
+
+    const baseFilter = typeFilter ? { targetType: typeFilter } : {};
+    let requests = await FlagRequest.find(baseFilter)
+      .populate('requestedBy', 'name email mobileNumber')
+      .sort({ createdAt: -1 });
+
+    if (statusFilter) {
+      requests = requests.filter((request) => normalizeFlagRequestStatus(request.status) === statusFilter);
+    }
+
+    const payload = requests.map((request) => {
+      const doc = request && typeof request.toObject === 'function' ? request.toObject() : { ...(request || {}) };
+      if (!doc.status) doc.status = 'pending';
+      return doc;
+    });
+
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -783,9 +802,12 @@ router.put('/flag-requests/:id/approve', auth(['admin']), async (req, res) => {
   try {
     const request = await FlagRequest.findById(req.params.id);
     if (!request) return res.status(404).json({ message: 'Flag request not found' });
-    if (request.status !== 'pending') {
+    const currentStatus = normalizeFlagRequestStatus(request.status);
+    if (currentStatus !== 'pending') {
       return res.status(400).json({ message: 'Request already resolved' });
     }
+
+    const note = String(req.body?.note || '').trim();
 
     if (request.targetType === 'ngo') {
       await NGO.findByIdAndUpdate(request.targetId, {
@@ -800,6 +822,7 @@ router.put('/flag-requests/:id/approve', auth(['admin']), async (req, res) => {
     }
 
     request.status = 'approved';
+    request.resolutionNote = note;
     request.resolvedBy = req.user.id;
     request.resolvedAt = new Date();
     await request.save();
@@ -814,11 +837,15 @@ router.put('/flag-requests/:id/reject', auth(['admin']), async (req, res) => {
   try {
     const request = await FlagRequest.findById(req.params.id);
     if (!request) return res.status(404).json({ message: 'Flag request not found' });
-    if (request.status !== 'pending') {
+    const currentStatus = normalizeFlagRequestStatus(request.status);
+    if (currentStatus !== 'pending') {
       return res.status(400).json({ message: 'Request already resolved' });
     }
 
+    const note = String(req.body?.note || '').trim();
+
     request.status = 'rejected';
+    request.resolutionNote = note;
     request.resolvedBy = req.user.id;
     request.resolvedAt = new Date();
     await request.save();

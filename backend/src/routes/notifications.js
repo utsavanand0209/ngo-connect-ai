@@ -16,7 +16,7 @@ router.get('/', auth(['user', 'ngo', 'admin']), async (req, res) => {
     let audienceFilter = ['all'];
     if (role === 'user') audienceFilter.push('users');
     if (role === 'ngo') audienceFilter.push('ngos');
-    if (role === 'admin') audienceFilter = ['all', 'users', 'ngos'];
+    if (role === 'admin') audienceFilter = ['all', 'users', 'ngos', 'admins'];
 
     const limit = Math.min(Number(req.query.limit) || 20, 50);
     const { rows } = await query(

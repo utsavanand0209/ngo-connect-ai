@@ -6,6 +6,7 @@ const NGO = require('../models/NGO');
 const Certificate = require('../models/Certificate');
 const Message = require('../models/Message');
 const FlagRequest = require('../models/FlagRequest');
+const Notification = require('../models/Notification');
 const auth = require('../middleware/auth');
 const AILog = require('../models/AILog');
 const { query } = require('../db/postgres');
@@ -648,11 +649,13 @@ router.post('/:id/flag-request', auth(['user']), async (req, res) => {
     const existing = await FlagRequest.findOne({
       targetType: 'campaign',
       targetId: campaign.id,
-      requestedBy: req.user.id,
-      status: 'pending'
+      requestedBy: req.user.id
     });
     if (existing) {
-      return res.status(400).json({ message: 'You already have a pending request for this campaign' });
+      const existingStatus = String(existing.status || 'pending').trim().toLowerCase();
+      if (existingStatus === 'pending') {
+        return res.status(400).json({ message: 'You already have a pending request for this campaign' });
+      }
     }
 
     const request = await FlagRequest.create({
@@ -660,8 +663,28 @@ router.post('/:id/flag-request', auth(['user']), async (req, res) => {
       targetId: campaign.id,
       targetName: campaign.title,
       reason: reason || 'Reported by user',
-      requestedBy: req.user.id
+      requestedBy: req.user.id,
+      status: 'pending'
     });
+
+    try {
+      await Notification.create({
+        title: 'New campaign flag request',
+        message: `A user requested admin review for campaign "${campaign.title || campaign.id}".${reason ? `\nReason: ${reason}` : ''}`,
+        audience: 'admins',
+        createdBy: req.user.id,
+        meta: {
+          event: 'flag-request-submitted',
+          targetType: 'campaign',
+          targetId: campaign.id,
+          flagRequestId: request.id,
+          requestedByEmail: req.user.email || null
+        }
+      });
+    } catch (notifyErr) {
+      // Non-blocking notification
+    }
+
     res.json({ message: 'Flag request submitted', request });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });

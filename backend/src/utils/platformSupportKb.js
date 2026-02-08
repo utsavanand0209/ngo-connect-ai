@@ -104,6 +104,26 @@ const SUPPORT_KB = [
     ].join('\n')
   },
   {
+    id: 'flagging',
+    title: 'Flagging NGOs/Campaigns (Admin Review Requests)',
+    keywords: ['flag', 'flag ngo', 'flag campaign', 'report', 'request admin review', 'flag request', 'moderation'],
+    content: [
+      'Flagging is used to report an NGO or campaign for admin review.',
+      '',
+      'User flow:',
+      '- Open an NGO or campaign and choose "Request Admin Review".',
+      '- Add a reason and submit. This creates a pending review request.',
+      '',
+      'Admin flow:',
+      '- Admin Dashboard -> Moderation -> Pending review requests.',
+      '- Approve: the NGO/campaign is flagged and appears in the moderation queue.',
+      '- Reject: the request is closed (admins can optionally leave an internal note).',
+      '',
+      'Where to check:',
+      '- Admin -> Flagged Content shows pending requests + currently flagged items.'
+    ].join('\n')
+  },
+  {
     id: 'status_glossary',
     title: 'Status Glossary',
     keywords: ['pending', 'approved', 'rejected', 'completed', 'assigned', 'applied', 'status', 'meaning'],
