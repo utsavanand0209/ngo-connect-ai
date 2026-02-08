@@ -59,6 +59,11 @@ export default function AdminDashboard() {
 
   const [actionState, setActionState] = useState({});
 
+  const [flagRequests, setFlagRequests] = useState([]);
+  const [flagRequestsLoading, setFlagRequestsLoading] = useState(true);
+  const [flagRequestsMessage, setFlagRequestsMessage] = useState('');
+  const [flagRequestNotes, setFlagRequestNotes] = useState({});
+
   const stats = snapshot?.stats || {
     pendingNgos: 0,
     verifiedNgos: 0,
@@ -97,17 +102,36 @@ export default function AdminDashboard() {
     []
   );
 
+  const fetchFlagRequests = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!silent) setFlagRequestsLoading(true);
+      setFlagRequestsMessage('');
+      try {
+        const res = await api.get('/admin/flag-requests', { params: { status: 'pending' } });
+        setFlagRequests(res.data || []);
+      } catch (err) {
+        setFlagRequests([]);
+        setFlagRequestsMessage(err.response?.data?.message || 'Unable to load pending review requests right now.');
+      } finally {
+        setFlagRequestsLoading(false);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     fetchSnapshot();
-  }, [fetchSnapshot]);
+    fetchFlagRequests();
+  }, [fetchSnapshot, fetchFlagRequests]);
 
   useEffect(() => {
     if (!autoRefresh) return undefined;
     const id = window.setInterval(() => {
       fetchSnapshot({ silent: true });
+      fetchFlagRequests({ silent: true });
     }, 10000);
     return () => window.clearInterval(id);
-  }, [autoRefresh, fetchSnapshot]);
+  }, [autoRefresh, fetchSnapshot, fetchFlagRequests]);
 
   const campaignRows = useMemo(() => {
     const q = campaignQuery.trim().toLowerCase();
@@ -264,6 +288,30 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleFlagRequestNoteChange = (id, value) => {
+    if (!id) return;
+    setFlagRequestNotes((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleResolveFlagRequest = async (id, action) => {
+    if (!id) return;
+    const mode = action === 'reject' ? 'reject' : 'approve';
+    const key = `flag-request-${mode}-${id}`;
+    setActionState((prev) => ({ ...prev, [key]: true }));
+    setFlagRequestsMessage('');
+    try {
+      await api.put(`/admin/flag-requests/${id}/${mode}`, {
+        note: flagRequestNotes[id] || ''
+      });
+      setFlagRequests((prev) => (prev || []).filter((req) => req.id !== id));
+      await fetchSnapshot({ noCache: true });
+    } catch (err) {
+      setFlagRequestsMessage(err.response?.data?.message || 'Failed to resolve the review request.');
+    } finally {
+      setActionState((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
   const donationSeries = snapshot?.series?.donations || [];
   const volunteerSeries = snapshot?.series?.volunteerApplications || [];
   const generatedAt = snapshot?.generatedAt || null;
@@ -275,6 +323,16 @@ export default function AdminDashboard() {
     rejectedCount: 0
   };
   const supportRequests = snapshot?.supportRequests || [];
+
+  const pendingNgoFlagRequests = useMemo(
+    () => (flagRequests || []).filter((req) => String(req?.targetType || '').trim().toLowerCase() === 'ngo'),
+    [flagRequests]
+  );
+
+  const pendingCampaignFlagRequests = useMemo(
+    () => (flagRequests || []).filter((req) => String(req?.targetType || '').trim().toLowerCase() === 'campaign'),
+    [flagRequests]
+  );
 
   const openServerRenderedView = async () => {
     setError('');
@@ -635,6 +693,151 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="mt-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Pending Review Requests</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    NGOs: {formatCount(pendingNgoFlagRequests.length)} • Campaigns: {formatCount(pendingCampaignFlagRequests.length)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchFlagRequests()}
+                  disabled={flagRequestsLoading}
+                  className="px-3 py-1.5 rounded-md bg-white border border-slate-200 text-slate-800 text-xs font-semibold hover:bg-slate-50 disabled:opacity-60"
+                >
+                  {flagRequestsLoading ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </div>
+
+              {flagRequestsMessage && (
+                <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+                  {flagRequestsMessage}
+                </div>
+              )}
+
+              {flagRequestsLoading ? (
+                <div className="mt-3 text-sm text-slate-600">Loading review requests…</div>
+              ) : (pendingNgoFlagRequests.length === 0 && pendingCampaignFlagRequests.length === 0) ? (
+                <div className="mt-3 rounded-lg border border-dashed border-slate-200 p-3 text-sm text-slate-600">
+                  No pending review requests.
+                </div>
+              ) : (
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-slate-200 p-3">
+                    <p className="text-xs font-semibold tracking-wide uppercase text-slate-500">NGO Requests</p>
+                    <div className="mt-3 space-y-3">
+                      {pendingNgoFlagRequests.length === 0 ? (
+                        <p className="text-sm text-slate-600">No NGO review requests.</p>
+                      ) : (
+                        pendingNgoFlagRequests.slice(0, 4).map((req) => {
+                          const approveKey = `flag-request-approve-${req.id}`;
+                          const rejectKey = `flag-request-reject-${req.id}`;
+                          const busy = Boolean(actionState[approveKey] || actionState[rejectKey]);
+                          return (
+                            <div key={req.id} className="rounded-lg border border-slate-200 p-3">
+                              <p className="font-semibold text-slate-900">
+                                <Link to={`/ngos/${req.targetId}`} className="hover:underline">
+                                  {req.targetName || req.targetId}
+                                </Link>
+                              </p>
+                              {req.reason && <p className="text-xs text-slate-600 mt-1">{req.reason}</p>}
+                              <p className="text-xs text-slate-500 mt-1">
+                                Requested: {when(req.createdAt)} • By: {req.requestedBy?.email || req.requestedBy?.name || 'User'}
+                              </p>
+
+                              <textarea
+                                rows={2}
+                                value={flagRequestNotes[req.id] || ''}
+                                onChange={(e) => handleFlagRequestNoteChange(req.id, e.target.value)}
+                                placeholder="Optional admin note"
+                                className="mt-2 w-full rounded-md border border-slate-200 p-2 text-xs"
+                              />
+
+                              <div className="mt-2 flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleResolveFlagRequest(req.id, 'approve')}
+                                  disabled={busy}
+                                  className="px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                  {actionState[approveKey] ? 'Approving…' : 'Approve & Flag'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResolveFlagRequest(req.id, 'reject')}
+                                  disabled={busy}
+                                  className="px-3 py-1.5 rounded-md bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-60"
+                                >
+                                  {actionState[rejectKey] ? 'Rejecting…' : 'Reject'}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 p-3">
+                    <p className="text-xs font-semibold tracking-wide uppercase text-slate-500">Campaign Requests</p>
+                    <div className="mt-3 space-y-3">
+                      {pendingCampaignFlagRequests.length === 0 ? (
+                        <p className="text-sm text-slate-600">No campaign review requests.</p>
+                      ) : (
+                        pendingCampaignFlagRequests.slice(0, 4).map((req) => {
+                          const approveKey = `flag-request-approve-${req.id}`;
+                          const rejectKey = `flag-request-reject-${req.id}`;
+                          const busy = Boolean(actionState[approveKey] || actionState[rejectKey]);
+                          return (
+                            <div key={req.id} className="rounded-lg border border-slate-200 p-3">
+                              <p className="font-semibold text-slate-900">
+                                <Link to={`/campaigns/${req.targetId}`} className="hover:underline">
+                                  {req.targetName || req.targetId}
+                                </Link>
+                              </p>
+                              {req.reason && <p className="text-xs text-slate-600 mt-1">{req.reason}</p>}
+                              <p className="text-xs text-slate-500 mt-1">
+                                Requested: {when(req.createdAt)} • By: {req.requestedBy?.email || req.requestedBy?.name || 'User'}
+                              </p>
+
+                              <textarea
+                                rows={2}
+                                value={flagRequestNotes[req.id] || ''}
+                                onChange={(e) => handleFlagRequestNoteChange(req.id, e.target.value)}
+                                placeholder="Optional admin note"
+                                className="mt-2 w-full rounded-md border border-slate-200 p-2 text-xs"
+                              />
+
+                              <div className="mt-2 flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleResolveFlagRequest(req.id, 'approve')}
+                                  disabled={busy}
+                                  className="px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                  {actionState[approveKey] ? 'Approving…' : 'Approve & Flag'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResolveFlagRequest(req.id, 'reject')}
+                                  disabled={busy}
+                                  className="px-3 py-1.5 rounded-md bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-60"
+                                >
+                                  {actionState[rejectKey] ? 'Rejecting…' : 'Reject'}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </section>
