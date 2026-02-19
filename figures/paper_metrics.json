@@ -1,0 +1,407 @@
+{
+  "route": {
+    "route_totals": {
+      "admin": {
+        "get": 14,
+        "post": 6,
+        "put": 4,
+        "delete": 1,
+        "patch": 0,
+        "total": 25
+      },
+      "ai": {
+        "get": 1,
+        "post": 7,
+        "put": 0,
+        "delete": 0,
+        "patch": 0,
+        "total": 8
+      },
+      "auth": {
+        "get": 1,
+        "post": 2,
+        "put": 1,
+        "delete": 0,
+        "patch": 0,
+        "total": 4
+      },
+      "campaigns": {
+        "get": 8,
+        "post": 6,
+        "put": 0,
+        "delete": 0,
+        "patch": 0,
+        "total": 14
+      },
+      "categories": {
+        "get": 2,
+        "post": 1,
+        "put": 1,
+        "delete": 1,
+        "patch": 0,
+        "total": 5
+      },
+      "certificates": {
+        "get": 3,
+        "post": 0,
+        "put": 0,
+        "delete": 0,
+        "patch": 0,
+        "total": 3
+      },
+      "donations": {
+        "get": 4,
+        "post": 4,
+        "put": 0,
+        "delete": 0,
+        "patch": 0,
+        "total": 8
+      },
+      "innovation": {
+        "get": 20,
+        "post": 24,
+        "put": 0,
+        "delete": 0,
+        "patch": 0,
+        "total": 44
+      },
+      "messages": {
+        "get": 3,
+        "post": 4,
+        "put": 0,
+        "delete": 0,
+        "patch": 0,
+        "total": 7
+      },
+      "ngos": {
+        "get": 5,
+        "post": 4,
+        "put": 1,
+        "delete": 0,
+        "patch": 0,
+        "total": 10
+      },
+      "notifications": {
+        "get": 1,
+        "post": 1,
+        "put": 0,
+        "delete": 0,
+        "patch": 0,
+        "total": 2
+      },
+      "requests": {
+        "get": 2,
+        "post": 1,
+        "put": 1,
+        "delete": 0,
+        "patch": 0,
+        "total": 4
+      },
+      "users": {
+        "get": 2,
+        "post": 0,
+        "put": 1,
+        "delete": 0,
+        "patch": 0,
+        "total": 3
+      },
+      "volunteering": {
+        "get": 6,
+        "post": 4,
+        "put": 0,
+        "delete": 2,
+        "patch": 0,
+        "total": 12
+      }
+    },
+    "method_totals": {
+      "get": 72,
+      "post": 64,
+      "put": 9,
+      "delete": 4,
+      "patch": 0
+    },
+    "endpoint_total": 149
+  },
+  "smoke": {
+    "steps": [
+      [
+        "API health",
+        72
+      ],
+      [
+        "Login as user",
+        125
+      ],
+      [
+        "Login as NGO",
+        80
+      ],
+      [
+        "Login as admin",
+        72
+      ],
+      [
+        "Fetch NGO profile",
+        104
+      ],
+      [
+        "List NGOs",
+        27
+      ],
+      [
+        "List campaigns",
+        7
+      ],
+      [
+        "Donation: initiate + confirm + receipt",
+        23
+      ],
+      [
+        "Donation: NGO certificate approve + user certificate visible",
+        21
+      ],
+      [
+        "Volunteer opportunity: create (NGO)",
+        3
+      ],
+      [
+        "Volunteer opportunity: apply + complete (user)",
+        7
+      ],
+      [
+        "Volunteer opportunity: NGO certificate approve",
+        7
+      ],
+      [
+        "Campaign volunteering: submit + NGO approve",
+        8
+      ],
+      [
+        "NGO transparency score",
+        3
+      ],
+      [
+        "Innovation: create wishlist item (NGO)",
+        5
+      ],
+      [
+        "Innovation: list wishlist items + pledge + receive",
+        10
+      ],
+      [
+        "Innovation: giving circle create + contribute",
+        17
+      ],
+      [
+        "Innovation: impact updates",
+        5
+      ],
+      [
+        "Innovation: volunteer shifts + logs + export",
+        23
+      ],
+      [
+        "Innovation: CRM donors + segments",
+        26
+      ],
+      [
+        "Innovation: corporate matching",
+        16
+      ],
+      [
+        "Innovation: volunteer endorsement",
+        8
+      ],
+      [
+        "Innovation: emergency feed",
+        6
+      ],
+      [
+        "Innovation: gamification summary + leaderboard",
+        6
+      ],
+      [
+        "Support request: create (user)",
+        3
+      ],
+      [
+        "Support request: appears in NGO inbox + status update",
+        8
+      ],
+      [
+        "Messaging: user -> NGO -> user thread roundtrip",
+        11
+      ],
+      [
+        "Flag request: submit + admin approve (best effort)",
+        4
+      ],
+      [
+        "Admin webhooks listing",
+        4
+      ],
+      [
+        "Admin webhook metrics",
+        2
+      ],
+      [
+        "Admin webhook export (json)",
+        2
+      ],
+      [
+        "Admin webhook cleanup dry run",
+        2
+      ],
+      [
+        "Admin webhook worker status",
+        1
+      ],
+      [
+        "Admin webhook worker run (best effort)",
+        1
+      ],
+      [
+        "Admin dashboard snapshot",
+        40
+      ]
+    ],
+    "step_count": 35,
+    "avg_ms": 21.69,
+    "max_ms": 125,
+    "p90_ms": 72,
+    "domain_avg": {
+      "Infrastructure": 72,
+      "Authentication": 92.33,
+      "Fetch": 104,
+      "List": 17,
+      "Donation": 22,
+      "Volunteer opportunity": 5.67,
+      "Campaign volunteering": 8,
+      "NGO": 3,
+      "Innovation": 12.2,
+      "Support request": 5.5,
+      "Messaging": 11,
+      "Flag request": 4,
+      "Admin": 7.43
+    },
+    "top_slowest_steps": [
+      [
+        "Login as user",
+        125
+      ],
+      [
+        "Fetch NGO profile",
+        104
+      ],
+      [
+        "Login as NGO",
+        80
+      ],
+      [
+        "API health",
+        72
+      ],
+      [
+        "Login as admin",
+        72
+      ],
+      [
+        "Admin dashboard snapshot",
+        40
+      ],
+      [
+        "List NGOs",
+        27
+      ],
+      [
+        "Innovation: CRM donors + segments",
+        26
+      ],
+      [
+        "Donation: initiate + confirm + receipt",
+        23
+      ],
+      [
+        "Innovation: volunteer shifts + logs + export",
+        23
+      ]
+    ]
+  },
+  "schema": {
+    "table_count": 35,
+    "tables": [
+      "users_rel",
+      "ngos_rel",
+      "categories_rel",
+      "campaigns_rel",
+      "volunteer_opportunities_rel",
+      "donations_rel",
+      "volunteer_applications_rel",
+      "certificates_rel",
+      "messages_rel",
+      "notifications_rel",
+      "help_requests_rel",
+      "flag_requests_rel",
+      "ai_logs_rel",
+      "webhook_deliveries_rel",
+      "giving_circles_rel",
+      "circle_members_rel",
+      "circle_contributions_rel",
+      "wishlist_items_rel",
+      "in_kind_pledges_rel",
+      "volunteer_shifts_rel",
+      "volunteer_shift_signups_rel",
+      "volunteer_logs_rel",
+      "donor_notes_rel",
+      "donor_segments_rel",
+      "donor_segment_members_rel",
+      "impact_updates_rel",
+      "corporate_profiles_rel",
+      "corporate_employee_links_rel",
+      "corporate_matches_rel",
+      "user_rewards_rel",
+      "volunteer_endorsements_rel",
+      "ngo_categories_rel",
+      "campaign_volunteers_rel",
+      "campaign_volunteer_registrations_rel",
+      "opportunity_applicants_rel"
+    ]
+  },
+  "frontend": {
+    "route_count": 31,
+    "routes": [
+      "/",
+      "/login",
+      "/register",
+      "/discover",
+      "/map",
+      "/volunteer-campaigns",
+      "/volunteer-opportunities",
+      "/donate",
+      "/insights",
+      "/dashboard",
+      "/profile",
+      "/ngo/profile",
+      "/ngos",
+      "/ngos/:id",
+      "/ngo-detail",
+      "/campaigns",
+      "/campaigns/:id",
+      "/campaigns/create",
+      "/volunteer",
+      "/messages",
+      "/innovation-center",
+      "/chatbot",
+      "/recommendations",
+      "/admin",
+      "/admin/verifications",
+      "/admin/flagged-content",
+      "/admin/users",
+      "/admin/analytics",
+      "/admin/notifications",
+      "/admin/requests",
+      "/admin/categories"
+    ]
+  }
+}
