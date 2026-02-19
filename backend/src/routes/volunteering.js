@@ -7,6 +7,7 @@ const Certificate = require('../models/Certificate');
 const auth = require('../middleware/auth');
 const { query } = require('../db/postgres');
 const { generateCertificateNumber } = require('../utils/certificateTemplates');
+const { awardPoints } = require('../utils/gamification');
 
 const cleanArray = (value) => {
   if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
@@ -17,6 +18,40 @@ const cleanArray = (value) => {
       .filter(Boolean);
   }
   return [];
+};
+
+const parseBoolean = (value, fallback = null) => {
+  if (typeof value === 'boolean') return value;
+  if (value === undefined || value === null || value === '') return fallback;
+  const raw = String(value).trim().toLowerCase();
+  if (['true', '1', 'yes', 'y'].includes(raw)) return true;
+  if (['false', '0', 'no', 'n'].includes(raw)) return false;
+  return fallback;
+};
+
+const parsePositiveNumber = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed * 10) / 10;
+};
+
+const normalizeOpportunityDoc = (opportunity = {}) => {
+  const doc = opportunity && typeof opportunity === 'object' ? { ...opportunity } : {};
+  const skillsRequired = cleanArray(doc.skillsRequired && doc.skillsRequired.length ? doc.skillsRequired : doc.skills);
+  const timeCommitmentHours =
+    parsePositiveNumber(doc.timeCommitmentHours) ??
+    parsePositiveNumber(doc.time_commitment_hours) ??
+    null;
+  const isMicroFromDoc = parseBoolean(doc.isMicroVolunteer, null);
+  const isMicroVolunteer = isMicroFromDoc !== null ? isMicroFromDoc : (timeCommitmentHours !== null ? timeCommitmentHours <= 4 : false);
+
+  doc.skillsRequired = skillsRequired;
+  if (!Array.isArray(doc.skills) || doc.skills.length === 0) {
+    doc.skills = skillsRequired;
+  }
+  doc.timeCommitmentHours = timeCommitmentHours;
+  doc.isMicroVolunteer = isMicroVolunteer;
+  return doc;
 };
 
 const chooseAssignedTask = (opportunity, preferredActivities = []) => {
@@ -36,6 +71,13 @@ const toDoc = (row, idField, docField) => {
   const doc = row?.[docField] && typeof row[docField] === 'object' ? { ...row[docField] } : {};
   if (!doc.id) doc.id = row?.[idField];
   return doc;
+};
+
+const toExternalId = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value.id) return String(value.id);
+  return '';
 };
 
 const issueVolunteerCertificate = async (applicationId) => {
@@ -78,10 +120,13 @@ const issueVolunteerCertificate = async (applicationId) => {
 // Get all volunteer opportunities
 router.get('/', async (req, res) => {
   try {
-    const { location, skills } = req.query;
+    const { location, maxHours } = req.query;
+    const querySkills = req.query.skills || req.query.skillsRequired;
+    const microFilter = parseBoolean(req.query.micro, null);
+    const maxHoursFilter = parsePositiveNumber(maxHours);
     const conditions = ['1=1'];
     const values = [];
-    const normalizedSkills = cleanArray(skills).map((entry) => entry.toLowerCase());
+    const normalizedSkills = cleanArray(querySkills).map((entry) => entry.toLowerCase());
 
     if (location) {
       values.push(`%${String(location).trim()}%`);
@@ -93,10 +138,17 @@ router.get('/', async (req, res) => {
       values.push(normalizedSkills);
       const valueIndex = values.length;
       conditions.push(`
-        EXISTS (
-          SELECT 1
-          FROM jsonb_array_elements_text(COALESCE(vo.source_doc->'skills', '[]'::jsonb)) AS s(value)
-          WHERE LOWER(s.value) = ANY($${valueIndex}::text[])
+        (
+          EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements_text(COALESCE(vo.source_doc->'skills', '[]'::jsonb)) AS s(value)
+            WHERE LOWER(s.value) = ANY($${valueIndex}::text[])
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements_text(COALESCE(vo.source_doc->'skillsRequired', '[]'::jsonb)) AS sr(value)
+            WHERE LOWER(sr.value) = ANY($${valueIndex}::text[])
+          )
         )
       `);
     }
@@ -117,8 +169,8 @@ router.get('/', async (req, res) => {
       values
     );
 
-    const opportunities = rows.map((row) => {
-      const opportunity = toDoc(row, 'opportunity_id', 'opportunity_doc');
+    let opportunities = rows.map((row) => {
+      const opportunity = normalizeOpportunityDoc(toDoc(row, 'opportunity_id', 'opportunity_doc'));
       if (row.ngo_doc) {
         const ngo = toDoc(row, 'ngo_id', 'ngo_doc');
         opportunity.ngo = {
@@ -133,6 +185,16 @@ router.get('/', async (req, res) => {
       }
       return opportunity;
     });
+
+    opportunities = opportunities.filter((opportunity) => {
+      if (microFilter !== null && opportunity.isMicroVolunteer !== microFilter) return false;
+      if (maxHoursFilter !== null) {
+        const hours = parsePositiveNumber(opportunity.timeCommitmentHours);
+        if (hours !== null && hours > maxHoursFilter) return false;
+      }
+      return true;
+    });
+
     res.json(opportunities);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -346,8 +408,23 @@ router.get('/ngo/:id', async (req, res) => {
 // Create volunteer opportunity (NGO only)
 router.post('/', auth(['ngo']), async (req, res) => {
   try {
-    const data = req.body;
+    const data = req.body || {};
     data.ngo = req.user.id;
+    data.skillsRequired = cleanArray(data.skillsRequired && data.skillsRequired.length ? data.skillsRequired : data.skills);
+    data.skills = data.skillsRequired;
+
+    const normalizedHours = parsePositiveNumber(data.timeCommitmentHours);
+    if (normalizedHours !== null) {
+      data.timeCommitmentHours = normalizedHours;
+    } else {
+      delete data.timeCommitmentHours;
+    }
+
+    const explicitMicro = parseBoolean(data.isMicroVolunteer, null);
+    data.isMicroVolunteer = explicitMicro !== null
+      ? explicitMicro
+      : (normalizedHours !== null ? normalizedHours <= 4 : false);
+
     if (!Array.isArray(data.applicants)) data.applicants = [];
     const opportunity = await VolunteerOpportunity.create(data);
     res.json(opportunity);
@@ -519,6 +596,19 @@ router.post('/:id/complete', auth(['user']), async (req, res) => {
     application.certificateApprovalRequestedAt = new Date();
     await application.save();
 
+    try {
+      await awardPoints(req.user.id, {
+        points: Math.max(8, Math.round(Number(application.activityHours || 0) * 3)),
+        eventType: 'volunteer_completion_submitted',
+        badgeKey: 'service_starter',
+        reason: 'Marked volunteer activity as completed (pending NGO approval).',
+        referenceType: 'volunteer_application',
+        referenceId: application.id
+      });
+    } catch (rewardErr) {
+      // best effort reward awarding
+    }
+
     res.json({
       message: 'Volunteer completion recorded. Waiting for NGO approval before certificate issuance.',
       application
@@ -566,6 +656,21 @@ router.post('/applications/:applicationId/certificate/decision', auth(['ngo']), 
     }
 
     const certificate = await issueVolunteerCertificate(application.id);
+    const volunteerUserId = toExternalId(application.user);
+    if (volunteerUserId) {
+      try {
+        await awardPoints(volunteerUserId, {
+          points: Math.max(20, Math.round(Number(application.activityHours || 0) * 5)),
+          eventType: 'volunteer_certificate_approved',
+          badgeKey: Number(application.activityHours || 0) >= 8 ? 'community_champion' : 'community_helper',
+          reason: 'Volunteer certificate approved by NGO.',
+          referenceType: 'volunteer_certificate',
+          referenceId: application.id
+        });
+      } catch (rewardErr) {
+        // best effort reward awarding
+      }
+    }
     res.json({
       message: 'Certificate approved and issued.',
       application,

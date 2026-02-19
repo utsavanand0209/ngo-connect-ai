@@ -411,6 +411,317 @@ const main = async () => {
     expect(row.registration, 'Campaign volunteer registration missing details');
   });
 
+  await step('NGO transparency score', async () => {
+    const scoreRes = await requestJson('GET', `/ngos/${ngoMe.id}/transparency`, {
+      expectedStatus: 200
+    });
+    expect(scoreRes.data?.transparencyScore, 'Transparency score payload missing');
+    expect(Number.isFinite(Number(scoreRes.data?.transparencyScore?.score)), 'Transparency score value invalid');
+  });
+
+  const innovationFlow = {};
+
+  await step('Innovation: create wishlist item (NGO)', async () => {
+    const created = await requestJson('POST', '/innovation/wishlists/items', {
+      token: tokens.ngo,
+      body: {
+        campaignId: donationCampaign.id,
+        itemName: 'Science Workbooks',
+        description: 'Workbooks for classroom intervention',
+        quantityNeeded: 40,
+        unit: 'books',
+        priority: 'high',
+        emergency: false
+      },
+      expectedStatus: 201
+    });
+    expect(created.data?.id, 'Wishlist item create missing id');
+    innovationFlow.wishlistItemId = created.data.id;
+  });
+
+  await step('Innovation: list wishlist items + pledge + receive', async () => {
+    const listed = await requestJson('GET', `/innovation/wishlists/items?ngoId=${encodeURIComponent(ngoMe.id)}`, {
+      expectedStatus: 200
+    });
+    expect(Array.isArray(listed.data), 'Wishlist list payload invalid');
+    const item = listed.data.find((entry) => String(entry?.id || '') === String(innovationFlow.wishlistItemId));
+    expect(item, 'Created wishlist item not found in list');
+
+    const pledge = await requestJson('POST', `/innovation/wishlists/items/${innovationFlow.wishlistItemId}/pledge`, {
+      token: tokens.user,
+      body: {
+        quantityPledged: 12,
+        note: 'Smoke test pledge'
+      },
+      expectedStatus: 201
+    });
+    expect(pledge.data?.id, 'Wishlist pledge missing id');
+    innovationFlow.wishlistPledgeId = pledge.data.id;
+
+    const received = await requestJson('POST', `/innovation/wishlists/pledges/${innovationFlow.wishlistPledgeId}/status`, {
+      token: tokens.ngo,
+      body: { status: 'received' },
+      expectedStatus: 200
+    });
+    expect(received.data?.pledge?.status === 'received', 'Wishlist pledge status did not update to received');
+  });
+
+  await step('Innovation: giving circle create + contribute', async () => {
+    const circle = await requestJson('POST', '/innovation/giving-circles', {
+      token: tokens.user,
+      body: {
+        campaignId: donationCampaign.id,
+        name: 'Smoke Circle',
+        description: 'Collective donation circle',
+        goalAmount: 15000
+      },
+      expectedStatus: 201
+    });
+    expect(circle.data?.id, 'Giving circle create missing id');
+    innovationFlow.circleId = circle.data.id;
+
+    const contribute = await requestJson('POST', `/innovation/giving-circles/${innovationFlow.circleId}/contribute`, {
+      token: tokens.user,
+      body: {
+        amount: 750,
+        note: 'Smoke test circle contribution'
+      },
+      expectedStatus: 201
+    });
+    expect(contribute.data?.contribution?.id, 'Giving circle contribution missing id');
+
+    const details = await requestJson('GET', `/innovation/giving-circles/${innovationFlow.circleId}`, {
+      token: tokens.user,
+      expectedStatus: 200
+    });
+    expect(Array.isArray(details.data?.members), 'Giving circle details missing members');
+    expect(Array.isArray(details.data?.contributions), 'Giving circle details missing contributions');
+  });
+
+  await step('Innovation: impact updates', async () => {
+    const created = await requestJson('POST', '/innovation/impact-updates', {
+      token: tokens.ngo,
+      body: {
+        campaignId: donationCampaign.id,
+        title: 'Library materials delivered',
+        details: 'Delivered learning materials to 3 government schools as part of the campaign activity plan.',
+        amountUtilized: 18000,
+        beneficiariesReached: 145,
+        evidence: ['https://example.org/smoke/evidence-1']
+      },
+      expectedStatus: 201
+    });
+    expect(created.data?.id, 'Impact update create missing id');
+
+    const listed = await requestJson('GET', `/innovation/impact-updates/campaign/${donationCampaign.id}`, {
+      expectedStatus: 200
+    });
+    expect(Array.isArray(listed.data) && listed.data.length > 0, 'Impact updates list empty');
+  });
+
+  await step('Innovation: volunteer shifts + logs + export', async () => {
+    const now = Date.now();
+    const shift = await requestJson('POST', '/innovation/volunteer/shifts', {
+      token: tokens.ngo,
+      body: {
+        title: 'Smoke shift',
+        opportunityId: volunteerOpportunity.id,
+        campaignId: donationCampaign.id,
+        location: 'Koramangala',
+        note: 'Smoke test shift',
+        startAt: new Date(now + 1000 * 60 * 60 * 26).toISOString(),
+        endAt: new Date(now + 1000 * 60 * 60 * 30).toISOString(),
+        slots: 8,
+        reminderBeforeHours: 12
+      },
+      expectedStatus: 201
+    });
+    expect(shift.data?.id, 'Volunteer shift create missing id');
+    innovationFlow.shiftId = shift.data.id;
+
+    const signup = await requestJson('POST', `/innovation/volunteer/shifts/${innovationFlow.shiftId}/signup`, {
+      token: tokens.user,
+      body: {},
+      expectedStatus: 201
+    });
+    expect(signup.data?.id, 'Shift signup missing id');
+    innovationFlow.shiftSignupId = signup.data.id;
+
+    const volunteerLog = await requestJson('POST', `/innovation/volunteer/logs/${innovationFlow.shiftSignupId}`, {
+      token: tokens.user,
+      body: {
+        hours: 4.5,
+        summary: 'Supported logistics and attendee onboarding.'
+      },
+      expectedStatus: 201
+    });
+    expect(volunteerLog.data?.id, 'Volunteer log missing id');
+    innovationFlow.volunteerLogId = volunteerLog.data.id;
+
+    const ngoLogs = await requestJson('GET', '/innovation/volunteer/logs/ngo', {
+      token: tokens.ngo,
+      expectedStatus: 200
+    });
+    expect(Array.isArray(ngoLogs.data), 'NGO volunteer logs payload invalid');
+
+    const approveLog = await requestJson('POST', `/innovation/volunteer/logs/${innovationFlow.volunteerLogId}/approve`, {
+      token: tokens.ngo,
+      body: { decision: 'approve', note: 'Smoke approval' },
+      expectedStatus: 200
+    });
+    expect(String(approveLog.data?.log?.approvalStatus || '').toLowerCase() === 'approved', 'Volunteer log not approved');
+
+    const exportCsv = await requestText('GET', '/innovation/volunteer/logs/ngo/export', {
+      token: tokens.ngo,
+      expectedStatus: 200
+    });
+    expect(typeof exportCsv.data === 'string' && exportCsv.data.includes('logId'), 'Volunteer log export CSV invalid');
+  });
+
+  await step('Innovation: CRM donors + segments', async () => {
+    const donors = await requestJson('GET', '/innovation/crm/donors', {
+      token: tokens.ngo,
+      expectedStatus: 200
+    });
+    expect(Array.isArray(donors.data) && donors.data.length > 0, 'CRM donor list empty');
+    const donorUserId = donors.data[0]?.donorUserId;
+    expect(donorUserId, 'CRM donor row missing donorUserId');
+
+    const note = await requestJson('POST', `/innovation/crm/donors/${donorUserId}/notes`, {
+      token: tokens.ngo,
+      body: { noteText: 'Smoke test donor note' },
+      expectedStatus: 201
+    });
+    expect(note.data?.id, 'CRM donor note create missing id');
+
+    const segment = await requestJson('POST', '/innovation/crm/segments', {
+      token: tokens.ngo,
+      body: {
+        segmentName: `Smoke Segment ${Date.now().toString(36)}`,
+        segmentDescription: 'Smoke segment for donor message',
+        donorUserIds: donors.data.slice(0, 2).map((entry) => entry.donorUserId).filter(Boolean)
+      },
+      expectedStatus: 201
+    });
+    expect(segment.data?.id, 'CRM segment create missing id');
+    innovationFlow.segmentId = segment.data.id;
+
+    const dispatch = await requestJson('POST', `/innovation/crm/segments/${innovationFlow.segmentId}/campaign-message`, {
+      token: tokens.ngo,
+      body: {
+        title: 'Impact milestone',
+        message: 'Thank you for supporting this campaign. We have reached a major milestone this week.'
+      },
+      expectedStatus: 200
+    });
+    expect(Number(dispatch.data?.recipients || 0) >= 1, 'CRM segment dispatch recipients missing');
+  });
+
+  await step('Innovation: corporate matching', async () => {
+    const profile = await requestJson('POST', '/innovation/corporate/profiles', {
+      token: tokens.user,
+      body: {
+        companyName: `Smoke Match Corp ${Date.now().toString(36)}`,
+        matchRatio: 1.5,
+        capPerEmployee: 12000,
+        policyNote: 'Smoke policy'
+      },
+      expectedStatus: 201
+    });
+    expect(profile.data?.id, 'Corporate profile create missing id');
+    innovationFlow.corporateProfileId = profile.data.id;
+
+    const link = await requestJson('POST', `/innovation/corporate/profiles/${innovationFlow.corporateProfileId}/link`, {
+      token: tokens.user,
+      body: { employeeCode: 'SMK-EMP-001' },
+      expectedStatus: 201
+    });
+    expect(link.data?.id, 'Corporate link create missing id');
+
+    const evaluate = await requestJson('POST', '/innovation/corporate/matches/evaluate', {
+      token: tokens.user,
+      body: { donationId: donationFlow.donationId },
+      expectedStatus: 201
+    });
+    expect(evaluate.data?.id, 'Corporate match evaluate missing id');
+    innovationFlow.corporateMatchId = evaluate.data.id;
+
+    const approve = await requestJson('POST', `/innovation/corporate/matches/${innovationFlow.corporateMatchId}/approve`, {
+      token: tokens.user,
+      body: {},
+      expectedStatus: 200
+    });
+    expect(String(approve.data?.match?.status || '').toLowerCase() === 'approved', 'Corporate match not approved');
+
+    const myMatches = await requestJson('GET', '/innovation/corporate/matches/my', {
+      token: tokens.user,
+      expectedStatus: 200
+    });
+    expect(Array.isArray(myMatches.data) && myMatches.data.length > 0, 'Corporate matches list empty');
+  });
+
+  await step('Innovation: volunteer endorsement', async () => {
+    const endorse = await requestJson('POST', '/innovation/endorsements', {
+      token: tokens.ngo,
+      body: {
+        userId: identities.user.id,
+        applicationId: volunteerApplication.applicationId,
+        skills: ['Community Outreach', 'Event Coordination'],
+        note: 'Smoke test endorsement'
+      },
+      expectedStatus: 201
+    });
+    expect(endorse.data?.id, 'Volunteer endorsement create missing id');
+
+    const myEndorsements = await requestJson('GET', '/innovation/endorsements/my', {
+      token: tokens.user,
+      expectedStatus: 200
+    });
+    expect(Array.isArray(myEndorsements.data), 'Volunteer endorsements payload invalid');
+  });
+
+  await step('Innovation: emergency feed', async () => {
+    const campaignEmergency = await requestJson('POST', `/innovation/emergency/campaigns/${donationCampaign.id}`, {
+      token: tokens.ngo,
+      body: {
+        emergency: true,
+        emergencyNote: 'Smoke emergency campaign toggle'
+      },
+      expectedStatus: 200
+    });
+    expect(campaignEmergency.data?.campaign?.emergency === true, 'Campaign emergency toggle failed');
+
+    const opportunityEmergency = await requestJson('POST', `/innovation/emergency/opportunities/${volunteerOpportunity.id}`, {
+      token: tokens.ngo,
+      body: {
+        emergency: true,
+        emergencyNote: 'Smoke emergency opportunity toggle'
+      },
+      expectedStatus: 200
+    });
+    expect(opportunityEmergency.data?.opportunity?.emergency === true, 'Opportunity emergency toggle failed');
+
+    const feed = await requestJson('GET', '/innovation/emergency/feed', {
+      expectedStatus: 200
+    });
+    expect(feed.data && typeof feed.data === 'object', 'Emergency feed payload invalid');
+    expect(Array.isArray(feed.data.campaigns), 'Emergency feed campaigns missing');
+  });
+
+  await step('Innovation: gamification summary + leaderboard', async () => {
+    const me = await requestJson('GET', '/innovation/gamification/me', {
+      token: tokens.user,
+      expectedStatus: 200
+    });
+    expect(me.data && typeof me.data === 'object', 'Gamification summary payload invalid');
+    expect(Number.isFinite(Number(me.data.points || 0)), 'Gamification summary points invalid');
+
+    const leaderboard = await requestJson('GET', '/innovation/gamification/leaderboard?limit=10', {
+      expectedStatus: 200
+    });
+    expect(Array.isArray(leaderboard.data), 'Gamification leaderboard payload invalid');
+  });
+
   const supportRequest = await step('Support request: create (user)', async () => {
     const res = await requestJson('POST', '/requests', {
       token: tokens.user,
@@ -512,6 +823,66 @@ const main = async () => {
     });
   });
 
+  await step('Admin webhooks listing', async () => {
+    const webhooks = await requestJson('GET', '/admin/webhooks?limit=5', {
+      token: tokens.admin,
+      expectedStatus: 200
+    });
+    expect(webhooks.data && typeof webhooks.data === 'object', 'Admin webhooks response invalid');
+    expect(Array.isArray(webhooks.data.rows), 'Admin webhooks response missing rows[]');
+  });
+
+  await step('Admin webhook metrics', async () => {
+    const metrics = await requestJson('GET', '/admin/webhooks/metrics?hours=24', {
+      token: tokens.admin,
+      expectedStatus: 200
+    });
+    expect(metrics.data && typeof metrics.data === 'object', 'Admin webhook metrics payload invalid');
+    expect(metrics.data.summary && typeof metrics.data.summary === 'object', 'Admin webhook metrics missing summary');
+  });
+
+  await step('Admin webhook export (json)', async () => {
+    const exported = await requestJson('GET', '/admin/webhooks/export?format=json&limit=5', {
+      token: tokens.admin,
+      expectedStatus: 200
+    });
+    expect(exported.data && typeof exported.data === 'object', 'Admin webhook export payload invalid');
+    expect(Array.isArray(exported.data.rows), 'Admin webhook export missing rows[]');
+  });
+
+  await step('Admin webhook cleanup dry run', async () => {
+    const cleanup = await requestJson('POST', '/admin/webhooks/cleanup', {
+      token: tokens.admin,
+      body: {
+        dryRun: true,
+        olderThanDays: 30,
+        statuses: ['delivered', 'skipped', 'replayed_success'],
+        limit: 50
+      },
+      expectedStatus: 200
+    });
+    expect(cleanup.data && typeof cleanup.data === 'object', 'Admin webhook cleanup payload invalid');
+    expect(cleanup.data.result && typeof cleanup.data.result === 'object', 'Admin webhook cleanup missing result');
+  });
+
+  await step('Admin webhook worker status', async () => {
+    const status = await requestJson('GET', '/admin/webhooks/worker/status', {
+      token: tokens.admin,
+      expectedStatus: 200
+    });
+    expect(status.data && typeof status.data === 'object', 'Webhook worker status payload invalid');
+    expect(typeof status.data.enabled === 'boolean', 'Webhook worker status missing enabled flag');
+    expect(status.data.runtime && typeof status.data.runtime === 'object', 'Webhook worker status missing runtime');
+  });
+
+  await step('Admin webhook worker run (best effort)', async () => {
+    await requestJson('POST', '/admin/webhooks/worker/run', {
+      token: tokens.admin,
+      body: {},
+      expectedStatus: [200, 400]
+    });
+  });
+
   await step('Admin dashboard snapshot', async () => {
     const dashboard = await requestJson('GET', '/admin/dashboard?noCache=true', {
       token: tokens.admin,
@@ -535,4 +906,3 @@ main().catch((err) => {
   console.error(err && err.stack ? err.stack : err);
   process.exit(1);
 });
-

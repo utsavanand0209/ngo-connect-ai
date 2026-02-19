@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { getTokenPayload } from '../utils/auth';
 
 export default function Navbar() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -7,19 +8,9 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleAuthChange = () => {
-    const token = localStorage.getItem('token');
-    setIsAuthenticated(!!token);
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setUserRole(payload.role);
-      } catch (e) {
-        console.error('Failed to parse token:', e);
-        setUserRole('');
-      }
-    } else {
-      setUserRole('');
-    }
+    const payload = getTokenPayload();
+    setIsAuthenticated(Boolean(payload));
+    setUserRole(payload?.role || '');
   };
 
   useEffect(() => {
@@ -35,6 +26,7 @@ export default function Navbar() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     window.dispatchEvent(new Event('authChange'));
+    setIsOpen(false);
     window.location.href = '/login';
   };
 
@@ -47,26 +39,33 @@ export default function Navbar() {
               NGO Connect
             </Link>
             <div className="hidden md:flex items-center gap-6 text-sm font-medium">
-              <Link to="/discover" className="text-gray-600 hover:text-gray-900 transition-colors">NGOs</Link>
-              <Link to="/map" className="text-gray-600 hover:text-gray-900 transition-colors">Map</Link>
-              <Link to="/campaigns" className="text-gray-600 hover:text-gray-900 transition-colors">Campaigns</Link>
-              {userRole === 'user' && (
-                <Link to="/volunteer-opportunities" className="text-gray-600 hover:text-gray-900 transition-colors">Volunteer</Link>
-              )}
-              {userRole === 'user' && (
-                <Link to="/donate" className="text-gray-600 hover:text-gray-900 transition-colors">Donate</Link>
-              )}
-              <Link to="/chatbot" className="text-gray-600 hover:text-gray-900 transition-colors">Chatbot</Link>
-              {userRole === 'user' && (
-                <Link to="/insights" className="text-gray-600 hover:text-gray-900 transition-colors">Insights</Link>
-              )}
-              {isAuthenticated && (userRole === 'user' || userRole === 'ngo') && (
-                <Link to="/messages" className="text-gray-600 hover:text-gray-900 transition-colors">Messages</Link>
-              )}
-              {isAuthenticated && userRole === 'ngo' && (
-                <Link to="/ngo/profile" className="text-gray-600 hover:text-gray-900 transition-colors">
-                  My NGO Profile
-                </Link>
+              {isAuthenticated && (
+                <>
+                  <Link to="/discover" className="text-gray-600 hover:text-gray-900 transition-colors">NGOs</Link>
+                  <Link to="/map" className="text-gray-600 hover:text-gray-900 transition-colors">Map</Link>
+                  <Link to="/campaigns" className="text-gray-600 hover:text-gray-900 transition-colors">Campaigns</Link>
+                  {userRole === 'user' && (
+                    <Link to="/volunteer-opportunities" className="text-gray-600 hover:text-gray-900 transition-colors">Volunteer</Link>
+                  )}
+                  {userRole === 'user' && (
+                    <Link to="/donate" className="text-gray-600 hover:text-gray-900 transition-colors">Donate</Link>
+                  )}
+                  <Link to="/chatbot" className="text-gray-600 hover:text-gray-900 transition-colors">Chatbot</Link>
+                  {userRole === 'user' && (
+                    <Link to="/insights" className="text-gray-600 hover:text-gray-900 transition-colors">Insights</Link>
+                  )}
+                  {(userRole === 'user' || userRole === 'ngo') && (
+                    <Link to="/messages" className="text-gray-600 hover:text-gray-900 transition-colors">Messages</Link>
+                  )}
+                  {(userRole === 'user' || userRole === 'ngo') && (
+                    <Link to="/innovation-center" className="text-gray-600 hover:text-gray-900 transition-colors">Innovation</Link>
+                  )}
+                  {userRole === 'ngo' && (
+                    <Link to="/ngo/profile" className="text-gray-600 hover:text-gray-900 transition-colors">
+                      My NGO Profile
+                    </Link>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -120,26 +119,33 @@ export default function Navbar() {
       {isOpen && (
         <div className="md:hidden" id="mobile-menu">
           <div className="px-3 pt-3 pb-4 space-y-2">
-            <Link to="/discover" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">NGOs</Link>
-            <Link to="/map" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Map</Link>
-            <Link to="/campaigns" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Campaigns</Link>
-            {userRole === 'user' && (
-              <Link to="/volunteer-opportunities" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Volunteer</Link>
-            )}
-            {userRole === 'user' && (
-              <Link to="/donate" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Donate</Link>
-            )}
-            <Link to="/chatbot" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Chatbot</Link>
-            {userRole === 'user' && (
-              <Link to="/insights" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Insights</Link>
-            )}
-            {isAuthenticated && (userRole === 'user' || userRole === 'ngo') && (
-              <Link to="/messages" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Messages</Link>
-            )}
-            {isAuthenticated && userRole === 'ngo' && (
-              <Link to="/ngo/profile" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">
-                My NGO Profile
-              </Link>
+            {isAuthenticated && (
+              <>
+                <Link to="/discover" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">NGOs</Link>
+                <Link to="/map" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Map</Link>
+                <Link to="/campaigns" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Campaigns</Link>
+                {userRole === 'user' && (
+                  <Link to="/volunteer-opportunities" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Volunteer</Link>
+                )}
+                {userRole === 'user' && (
+                  <Link to="/donate" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Donate</Link>
+                )}
+                <Link to="/chatbot" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Chatbot</Link>
+                {userRole === 'user' && (
+                  <Link to="/insights" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Insights</Link>
+                )}
+                {(userRole === 'user' || userRole === 'ngo') && (
+                  <Link to="/messages" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Messages</Link>
+                )}
+                {(userRole === 'user' || userRole === 'ngo') && (
+                  <Link to="/innovation-center" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">Innovation</Link>
+                )}
+                {userRole === 'ngo' && (
+                  <Link to="/ngo/profile" className="text-gray-700 hover:text-gray-900 block px-2 py-2 text-base font-medium">
+                    My NGO Profile
+                  </Link>
+                )}
+              </>
             )}
             {isAuthenticated ? (
               <>

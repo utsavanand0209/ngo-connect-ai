@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
+import { getUserId } from '../utils/auth';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
@@ -8,16 +9,7 @@ export default function AdminUsers() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const currentUserId = useMemo(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return null;
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.id;
-    } catch (err) {
-      return null;
-    }
-  }, []);
+  const currentUserId = useMemo(() => getUserId(), []);
 
   useEffect(() => {
     let isMounted = true;

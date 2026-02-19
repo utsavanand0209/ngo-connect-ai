@@ -24,6 +24,293 @@ if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "YOUR_API_KEY_H
   console.warn("GEMINI_API_KEY not found or is a placeholder. Chatbot will use fallback responses.");
 }
 
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+const toPositiveNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+};
+
+const toSafeText = (value, maxLength = 3000) => {
+  const text = String(value || '').trim();
+  return text.slice(0, maxLength);
+};
+
+const toTextArray = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry || '').trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const parseDurationDays = (input = {}) => {
+  const direct = Number(input.durationDays);
+  if (Number.isFinite(direct) && direct > 0) return Math.round(direct);
+
+  const startRaw = input.timelineStartDate || input.startDate;
+  const endRaw = input.timelineEndDate || input.endDate;
+  const start = Date.parse(startRaw || '');
+  const end = Date.parse(endRaw || '');
+  if (!Number.isNaN(start) && !Number.isNaN(end) && end > start) {
+    return Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+  }
+  return null;
+};
+
+const average = (values = []) => {
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length;
+};
+
+const median = (values = []) => {
+  if (!values.length) return 0;
+  const sorted = [...values].map((value) => Number(value || 0)).sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) return (sorted[mid - 1] + sorted[mid]) / 2;
+  return sorted[mid];
+};
+
+const inferCampaignDuration = (campaign = {}) =>
+  parseDurationDays({
+    durationDays: campaign.durationDays,
+    timelineStartDate: campaign.timelineStartDate || campaign.startDate,
+    timelineEndDate: campaign.timelineEndDate || campaign.endDate
+  });
+
+const buildProposalTemplate = (input = {}) => {
+  const type = String(input.type || 'campaign_description').trim().toLowerCase();
+  const title = toSafeText(input.title || 'Untitled Initiative', 140);
+  const cause = toSafeText(input.cause || 'social impact', 100);
+  const location = toSafeText(input.location || 'target communities', 120);
+  const targetAudience = toSafeText(input.targetAudience || 'donors and partners', 160);
+  const beneficiaries = toSafeText(input.beneficiaries || 'underserved families and youth', 260);
+  const timeline = toSafeText(input.timeline || '12-week implementation cycle', 120);
+  const goalAmount = toPositiveNumber(input.goalAmount, 0);
+  const keyActivities = toTextArray(input.keyActivities);
+  const activityText = keyActivities.length ? keyActivities.join(', ') : 'outreach, service delivery, and monitoring';
+  const existingContext = toSafeText(input.existingContext, 500);
+  const ngoName = toSafeText(input.ngoName || 'our NGO', 120);
+
+  if (type === 'grant_proposal') {
+    return [
+      `Executive Summary`,
+      `${ngoName} proposes "${title}" to address ${cause} challenges in ${location}. The project targets ${beneficiaries} through measurable interventions over ${timeline}.`,
+      ``,
+      `Problem Statement`,
+      `Communities in ${location} continue to face constraints in ${cause}. Existing support remains fragmented, limiting long-term outcomes.`,
+      ``,
+      `Objectives`,
+      `1. Improve service access for ${beneficiaries}.`,
+      `2. Deliver structured activities including ${activityText}.`,
+      `3. Build local ownership through transparent reporting and stakeholder collaboration.`,
+      ``,
+      `Implementation Plan`,
+      `The program will execute in phased cycles: mobilization, delivery, and monitoring. Weekly checkpoints and milestone reviews will be used to track progress.`,
+      ``,
+      `Budget Overview`,
+      goalAmount > 0
+        ? `Requested budget: INR ${goalAmount.toLocaleString('en-IN')}, with allocation across operations, program delivery, and monitoring.`
+        : `Budget will be finalized based on donor constraints and baseline assessment.`,
+      ``,
+      `Monitoring and Evaluation`,
+      `Outcome metrics include participation, completion, and beneficiary impact indicators. Findings will be published through periodic progress updates.`,
+      existingContext ? `` : '',
+      existingContext ? `Additional Context: ${existingContext}` : ''
+    ].filter(Boolean).join('\n');
+  }
+
+  if (type === 'impact_report') {
+    return [
+      `Impact Report: ${title}`,
+      `Reporting Window: ${timeline}`,
+      ``,
+      `Program Summary`,
+      `${ngoName} implemented activities focused on ${cause} in ${location} for ${beneficiaries}.`,
+      ``,
+      `Key Activities Delivered`,
+      `- ${activityText}`,
+      ``,
+      `Outcome Snapshot`,
+      `- Reach: beneficiary and volunteer participation tracked weekly`,
+      `- Delivery quality: milestone adherence and completion levels`,
+      `- Transparency: periodic public updates and financial summaries`,
+      ``,
+      `Financial Utilization`,
+      goalAmount > 0
+        ? `Total tracked budget envelope: INR ${goalAmount.toLocaleString('en-IN')}.`
+        : `Budget utilization captured in internal ledgers and donor update notes.`,
+      ``,
+      `Next-Phase Recommendations`,
+      `Expand high-performing activities, improve local partner coordination, and strengthen data collection for outcome verification.`,
+      existingContext ? `` : '',
+      existingContext ? `Additional Context: ${existingContext}` : ''
+    ].filter(Boolean).join('\n');
+  }
+
+  return [
+    `Campaign Overview`,
+    `"${title}" is a ${cause} campaign in ${location} focused on ${beneficiaries}.`,
+    ``,
+    `Why This Campaign Matters`,
+    `The campaign addresses a high-priority community need by combining resource mobilization with accountable execution.`,
+    ``,
+    `What We Will Do`,
+    `Core activities include ${activityText}.`,
+    ``,
+    `Funding Need`,
+    goalAmount > 0
+      ? `Campaign goal: INR ${goalAmount.toLocaleString('en-IN')}.`
+      : `Funding requirement will be calibrated from implementation milestones.`,
+    ``,
+    `Implementation Timeline`,
+    `${timeline}.`,
+    ``,
+    `Call to Action`,
+    `Support from ${targetAudience} will directly accelerate impact delivery and sustainability.`,
+    existingContext ? `` : '',
+    existingContext ? `Additional Context: ${existingContext}` : ''
+  ].filter(Boolean).join('\n');
+};
+
+const buildCampaignForecast = ({ input = {}, campaigns = [] }) => {
+  const goalAmount = toPositiveNumber(input.goalAmount, 0);
+  const durationDays = parseDurationDays(input);
+  const category = toSafeText(input.category, 80).toLowerCase();
+  const location = toSafeText(input.location, 120).toLowerCase();
+  const description = toSafeText(input.description, 4000);
+  const volunteersNeededCount = toTextArray(input.volunteersNeeded).length;
+
+  const normalized = (campaigns || [])
+    .map((campaign) => {
+      const goal = toPositiveNumber(campaign.goalAmount, 0);
+      const current = toPositiveNumber(campaign.currentAmount, 0);
+      const completion = goal > 0 ? clamp(current / goal, 0, 1.5) : 0;
+      return {
+        category: toSafeText(campaign.category, 80).toLowerCase(),
+        location: toSafeText(campaign.location, 120).toLowerCase(),
+        goalAmount: goal,
+        completionRate: completion,
+        durationDays: inferCampaignDuration(campaign)
+      };
+    })
+    .filter((row) => row.goalAmount > 0);
+
+  const globalCompletion = average(normalized.map((row) => row.completionRate)) || 0.42;
+  const sameCategoryRows = category ? normalized.filter((row) => row.category === category) : [];
+  const sameLocationRows = location ? normalized.filter((row) => row.location.includes(location)) : [];
+  const categoryCompletion = sameCategoryRows.length >= 3
+    ? average(sameCategoryRows.map((row) => row.completionRate))
+    : globalCompletion;
+  const locationCompletion = sameLocationRows.length >= 3
+    ? average(sameLocationRows.map((row) => row.completionRate))
+    : categoryCompletion;
+
+  const medianGoal = median(normalized.map((row) => row.goalAmount)) || Math.max(goalAmount, 50000);
+  const goalRatio = goalAmount > 0 && medianGoal > 0 ? goalAmount / medianGoal : 1;
+  let goalFeasibility = 0.6;
+  if (goalRatio <= 0.75) goalFeasibility = 0.84;
+  else if (goalRatio <= 1.2) goalFeasibility = 0.72;
+  else if (goalRatio <= 1.8) goalFeasibility = 0.52;
+  else goalFeasibility = 0.34;
+
+  let durationFit = 0.62;
+  if (durationDays !== null) {
+    if (durationDays >= 21 && durationDays <= 90) durationFit = 0.84;
+    else if (durationDays >= 14 && durationDays <= 120) durationFit = 0.68;
+    else if (durationDays < 14) durationFit = 0.42;
+    else durationFit = 0.52;
+  }
+
+  const indicatorKeywords = ['beneficiary', 'families', 'students', 'health', 'water', 'livelihood', 'training', 'impact', 'outcome'];
+  const keywordHits = indicatorKeywords.filter((keyword) => description.toLowerCase().includes(keyword)).length;
+  const descriptionQuality = clamp(
+    (description.length > 120 ? 0.35 : 0.12) + (description.length > 320 ? 0.2 : 0) + keywordHits * 0.06,
+    0.15,
+    0.92
+  );
+
+  const volunteerAdjustment = volunteersNeededCount >= 6 ? -0.05 : volunteersNeededCount > 0 ? 0.03 : 0;
+  const weighted = clamp(
+    categoryCompletion * 0.34 +
+      locationCompletion * 0.18 +
+      goalFeasibility * 0.22 +
+      durationFit * 0.14 +
+      descriptionQuality * 0.12 +
+      volunteerAdjustment,
+    0.18,
+    0.95
+  );
+
+  const successProbability = Math.round(clamp(weighted * 100, 18, 95));
+  const expectedCompletionRatio = clamp(weighted + (categoryCompletion - globalCompletion) * 0.1, 0.2, 1.1);
+  const expectedAmount = Math.round(goalAmount * expectedCompletionRatio);
+
+  const sampleSize = sameCategoryRows.length + sameLocationRows.length;
+  const volatility = sampleSize >= 20 ? 0.16 : sampleSize >= 8 ? 0.22 : 0.3;
+  const low = Math.round(Math.max(0, expectedAmount * (1 - volatility)));
+  const high = Math.round(Math.max(expectedAmount, expectedAmount * (1 + volatility)));
+
+  const strengths = [];
+  const risks = [];
+  const recommendedActions = [];
+
+  if (goalFeasibility >= 0.7) strengths.push('Target goal aligns with historical campaign sizes.');
+  else {
+    risks.push('Requested goal is high compared to historical campaign medians.');
+    recommendedActions.push('Phase the campaign into milestones with intermediate funding targets.');
+  }
+
+  if (durationFit >= 0.75) strengths.push('Campaign duration is in a high-performing range.');
+  else {
+    risks.push('Timeline may be too short or too long for optimal donor conversion.');
+    recommendedActions.push('Keep campaign runtime between 3 and 12 weeks where possible.');
+  }
+
+  if (descriptionQuality >= 0.65) strengths.push('Campaign narrative includes useful impact context.');
+  else {
+    risks.push('Campaign description lacks measurable impact details.');
+    recommendedActions.push('Add beneficiary counts, delivery milestones, and measurable outcomes.');
+  }
+
+  if (locationCompletion >= globalCompletion + 0.08) {
+    strengths.push('Location trend indicates stronger historical completion rates.');
+  }
+
+  if (volunteersNeededCount >= 6) {
+    risks.push('High volunteer dependency may slow execution if coordination is weak.');
+    recommendedActions.push('Publish clear role descriptions and stagger volunteer onboarding.');
+  }
+
+  const confidence = sampleSize >= 20 ? 'high' : sampleSize >= 8 ? 'medium' : 'low';
+
+  return {
+    successProbability,
+    confidence,
+    predictedRange: {
+      low,
+      expected: expectedAmount,
+      high
+    },
+    benchmark: {
+      sampleSize,
+      categorySampleSize: sameCategoryRows.length,
+      locationSampleSize: sameLocationRows.length,
+      medianGoal: Math.round(medianGoal),
+      averageCompletionRate: Number(globalCompletion.toFixed(3))
+    },
+    strengths,
+    risks,
+    recommendedActions
+  };
+};
+
 // Rule-based recommendation: simple scoring
 router.post('/recommend-ngos', async (req, res) => {
   try {
@@ -242,6 +529,110 @@ router.post('/classify-campaign', async (req, res) => {
   }
 });
 
+// NGO assistant: grant / campaign proposal draft generation
+router.post('/proposal-draft', auth(['ngo', 'admin']), async (req, res) => {
+  try {
+    const allowedTypes = new Set(['campaign_description', 'grant_proposal', 'impact_report']);
+    const requestedType = String(req.body?.type || 'campaign_description').trim().toLowerCase();
+    const type = allowedTypes.has(requestedType) ? requestedType : 'campaign_description';
+
+    const title = toSafeText(req.body?.title, 160);
+    const existingContext = toSafeText(req.body?.existingContext, 2000);
+    if (!title && !existingContext) {
+      return res.status(400).json({ message: 'Provide at least a title or context to generate a draft.' });
+    }
+
+    let ngoName = 'our NGO';
+    if (req.user?.role === 'ngo' && req.user?.id) {
+      const ngo = await NGO.findById(req.user.id);
+      if (ngo?.name) ngoName = ngo.name;
+    }
+
+    const input = {
+      type,
+      ngoName,
+      title,
+      cause: toSafeText(req.body?.cause, 120),
+      targetAudience: toSafeText(req.body?.targetAudience, 180),
+      beneficiaries: toSafeText(req.body?.beneficiaries, 280),
+      goalAmount: toPositiveNumber(req.body?.goalAmount, 0),
+      location: toSafeText(req.body?.location, 160),
+      keyActivities: toTextArray(req.body?.keyActivities),
+      timeline: toSafeText(req.body?.timeline, 140),
+      existingContext
+    };
+
+    let draft = buildProposalTemplate(input);
+    let mode = 'template';
+
+    if (genAI) {
+      try {
+        const model = genAI.getGenerativeModel(
+          { model: 'gemini-2.5-flash' },
+          { apiVersion: 'v1beta' }
+        );
+
+        const prompt = `
+You are an NGO proposal writing assistant.
+Generate a ${type.replace('_', ' ')} in clear professional language.
+Keep it practical, evidence-oriented, and suitable for donors/grant reviewers.
+Do not include markdown code fences.
+
+Context:
+- NGO: ${input.ngoName}
+- Initiative title: ${input.title || 'Not provided'}
+- Cause: ${input.cause || 'Not provided'}
+- Target audience: ${input.targetAudience || 'Not provided'}
+- Beneficiaries: ${input.beneficiaries || 'Not provided'}
+- Location: ${input.location || 'Not provided'}
+- Goal amount: ${input.goalAmount > 0 ? `INR ${input.goalAmount.toLocaleString('en-IN')}` : 'Not provided'}
+- Timeline: ${input.timeline || 'Not provided'}
+- Activities: ${input.keyActivities.join(', ') || 'Not provided'}
+- Existing context: ${input.existingContext || 'Not provided'}
+
+Output requirements:
+1) Use section headings.
+2) Include measurable outcomes.
+3) Keep length between 350 and 650 words.
+`.trim();
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const candidateDraft = String(response.text() || '').trim();
+        if (candidateDraft) {
+          draft = candidateDraft;
+          mode = 'gemini';
+        }
+      } catch (err) {
+        mode = 'template';
+      }
+    }
+
+    await AILog.create({
+      type: 'proposal-draft',
+      payload: {
+        userId: req.user?.id,
+        role: req.user?.role,
+        input: { ...input, existingContext: input.existingContext.slice(0, 500) }
+      },
+      result: {
+        mode,
+        type,
+        wordCount: draft.split(/\s+/).filter(Boolean).length
+      }
+    });
+
+    return res.json({
+      mode,
+      type,
+      draft
+    });
+  } catch (err) {
+    console.error('Error generating proposal draft:', err);
+    return res.status(500).json({ message: 'Unable to generate proposal draft right now.' });
+  }
+});
+
 // Chatbot (LLM-powered)
 router.post('/chat', async (req, res) => {
   try {
@@ -392,6 +783,52 @@ router.post('/fraud-score', async (req, res) => {
     res.json({ score, flagged });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Predictive fundraising analytics
+router.post('/campaign-forecast', auth(['ngo', 'admin']), async (req, res) => {
+  try {
+    const goalAmount = toPositiveNumber(req.body?.goalAmount, 0);
+    if (goalAmount <= 0) {
+      return res.status(400).json({ message: 'goalAmount must be greater than 0.' });
+    }
+
+    const allCampaigns = await Campaign.find();
+    const forecast = buildCampaignForecast({
+      input: {
+        title: req.body?.title,
+        description: req.body?.description,
+        category: req.body?.category,
+        location: req.body?.location,
+        goalAmount,
+        durationDays: req.body?.durationDays,
+        startDate: req.body?.startDate,
+        endDate: req.body?.endDate,
+        timelineStartDate: req.body?.timelineStartDate,
+        timelineEndDate: req.body?.timelineEndDate,
+        volunteersNeeded: req.body?.volunteersNeeded
+      },
+      campaigns: allCampaigns
+    });
+
+    await AILog.create({
+      type: 'campaign-forecast',
+      payload: {
+        userId: req.user?.id,
+        role: req.user?.role,
+        category: toSafeText(req.body?.category, 80),
+        location: toSafeText(req.body?.location, 120),
+        goalAmount,
+        durationDays: parseDurationDays(req.body || {})
+      },
+      result: forecast
+    });
+
+    return res.json(forecast);
+  } catch (err) {
+    console.error('Error in /campaign-forecast:', err);
+    return res.status(500).json({ message: 'Unable to generate campaign forecast right now.' });
   }
 });
 

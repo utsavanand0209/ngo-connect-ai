@@ -33,6 +33,7 @@ import AdminRequests from './pages/AdminRequests';
 import AdminCategories from './pages/AdminCategories';
 import AdminRoute from './components/AdminRoute';
 import UserRoute from './components/UserRoute';
+import InnovationCenter from './pages/InnovationCenter';
 
 export default function App() {
   return (
@@ -55,12 +56,13 @@ export default function App() {
         <Route path="/ngos/:id" element={<NgoProfile />} />
         {/* Demo route for static detailed NGO page */}
         <Route path="/ngo-detail" element={<NgoDetail />} />
-        <Route path="/campaigns" element={<CampaignList />} />
-        <Route path="/campaigns/:id" element={<CampaignDetails />} />
+        <Route path="/campaigns" element={<ProtectedRoute><CampaignList /></ProtectedRoute>} />
+        <Route path="/campaigns/:id" element={<ProtectedRoute><CampaignDetails /></ProtectedRoute>} />
         <Route path="/campaigns/create" element={<ProtectedRoute><CreateCampaign /></ProtectedRoute>} />
         <Route path="/volunteer" element={<Navigate to="/volunteer-opportunities" replace />} />
         <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-        <Route path="/chatbot" element={<Chatbot />} />
+        <Route path="/innovation-center" element={<ProtectedRoute><InnovationCenter /></ProtectedRoute>} />
+        <Route path="/chatbot" element={<ProtectedRoute><Chatbot /></ProtectedRoute>} />
         <Route path="/recommendations" element={<UserRoute><Recommendations /></UserRoute>} />
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/verifications" element={<AdminRoute><AdminVerifications /></AdminRoute>} />

@@ -21,6 +21,7 @@ export default function NgoList() {
   const role = getUserRole();
   const isAdmin = role === 'admin';
   const isUser = role === 'user';
+  const isNgo = role === 'ngo';
 
   useEffect(() => {
     setLoading(true);
@@ -92,6 +93,8 @@ export default function NgoList() {
         await api.post(`/ngos/${selectedNgo.id}/flag-request`, { reason: flagReason });
         setRequestedIds(prev => [...new Set([...prev, selectedNgo.id])]);
         setFlagMessage('Request sent to admin for review.');
+      } else if (isNgo) {
+        setFlagMessage('NGO accounts cannot request admin review.');
       } else {
         setFlagMessage('Please login to submit a request.');
       }
@@ -273,7 +276,7 @@ export default function NgoList() {
                     })()}
                     <button
                       onClick={() => openFlagModal(ngo)}
-                      disabled={ngo.flagged || requestedIds.includes(ngo.id)}
+                      disabled={ngo.flagged || requestedIds.includes(ngo.id) || isNgo}
                       className="w-full inline-block text-center px-6 py-2 border border-red-600 text-red-600 font-semibold rounded-lg hover:bg-red-50 disabled:text-gray-400 disabled:border-gray-300"
                     >
                       {ngo.flagged
@@ -282,7 +285,11 @@ export default function NgoList() {
                           ? 'Request Sent'
                           : isAdmin
                             ? 'Flag NGO'
-                            : 'Request Admin Review'}
+                            : isUser
+                              ? 'Request Admin Review'
+                              : isNgo
+                                ? 'Unavailable for NGO accounts'
+                                : 'Login to Request Review'}
                     </button>
                     {flagMessage && selectedNgo && selectedNgo.id === ngo.id && (
                       <p className="text-xs text-gray-600 text-center">{flagMessage}</p>
@@ -301,13 +308,15 @@ export default function NgoList() {
       </div>
       <ConfirmModal
         open={modalOpen}
-        title={isAdmin ? 'Flag NGO' : 'Request Admin Review'}
+        title={isAdmin ? 'Flag NGO' : isUser ? 'Request Admin Review' : 'Report NGO'}
         description={
           isAdmin
             ? 'This will mark the NGO as flagged and visible to admins.'
-            : 'Your request will be sent to the admin team for review.'
+            : isUser
+              ? 'Your request will be sent to the admin team for review.'
+              : 'Only user accounts can request admin review.'
         }
-        confirmLabel={isAdmin ? 'Flag NGO' : 'Send Request'}
+        confirmLabel={isAdmin ? 'Flag NGO' : isUser ? 'Send Request' : 'Submit'}
         onConfirm={handleFlagSubmit}
         onCancel={closeFlagModal}
         loading={flagLoading}

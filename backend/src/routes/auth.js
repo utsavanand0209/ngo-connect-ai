@@ -54,7 +54,8 @@ router.post('/register', async (req, res) => {
         categories: categoryList,
         category: categoryList[0] || undefined,
         address,
-        addressDetails
+        addressDetails,
+        members: []
       });
       return res.status(201).json({ message: 'NGO registered', ngoId: ngo.id });
     } else {

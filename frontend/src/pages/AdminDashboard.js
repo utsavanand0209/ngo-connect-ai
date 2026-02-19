@@ -11,7 +11,16 @@ import {
   XAxis,
   YAxis
 } from 'recharts';
-import api, { getAdminDashboard } from '../services/api';
+import api, {
+  getAdminDashboard,
+  getAdminWebhookDeliveries,
+  getAdminWebhookMetrics,
+  exportAdminWebhooks,
+  runAdminWebhookCleanup,
+  retryAdminWebhookDelivery,
+  getAdminWebhookWorkerStatus,
+  runAdminWebhookWorkerTick
+} from '../services/api';
 
 const formatINR = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
 const formatCount = (value) => Number(value || 0).toLocaleString('en-IN');
@@ -33,6 +42,17 @@ const openHtmlDocument = (html) => {
   viewer.document.write(html);
   viewer.document.close();
   return true;
+};
+
+const downloadBlob = (blob, filename) => {
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.URL.revokeObjectURL(url);
 };
 
 export default function AdminDashboard() {
@@ -58,6 +78,13 @@ export default function AdminDashboard() {
   const [showCampaignVolunteerRegistrations, setShowCampaignVolunteerRegistrations] = useState(false);
 
   const [actionState, setActionState] = useState({});
+  const [webhookMessage, setWebhookMessage] = useState('');
+  const [webhookWorkerStatus, setWebhookWorkerStatus] = useState(null);
+  const [webhookWorkerLoading, setWebhookWorkerLoading] = useState(false);
+  const [webhookMetrics, setWebhookMetrics] = useState(null);
+  const [webhookMetricsWindowHours, setWebhookMetricsWindowHours] = useState(24);
+  const [webhookMetricsLoading, setWebhookMetricsLoading] = useState(false);
+  const [webhookCleanupLoading, setWebhookCleanupLoading] = useState(false);
 
   const [flagRequests, setFlagRequests] = useState([]);
   const [flagRequestsLoading, setFlagRequestsLoading] = useState(true);
@@ -81,7 +108,10 @@ export default function AdminDashboard() {
     volunteerApplicationsCount: 0,
     volunteerCompletedCount: 0,
     campaignVolunteersCount: 0,
-    campaignVolunteerRegistrationsCount: 0
+    campaignVolunteerRegistrationsCount: 0,
+    webhookDeliveriesTotal: 0,
+    webhookDeliveredCount: 0,
+    webhookDeadLetterCount: 0
   };
 
   const fetchSnapshot = useCallback(
@@ -119,19 +149,50 @@ export default function AdminDashboard() {
     []
   );
 
+  const fetchWebhookWorkerStatus = useCallback(async () => {
+    try {
+      const res = await getAdminWebhookWorkerStatus();
+      setWebhookWorkerStatus(res.data || null);
+    } catch (err) {
+      setWebhookWorkerStatus(null);
+    }
+  }, []);
+
+  const fetchWebhookMetrics = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!silent) setWebhookMetricsLoading(true);
+      try {
+        const res = await getAdminWebhookMetrics({ hours: webhookMetricsWindowHours });
+        setWebhookMetrics(res.data || null);
+      } catch (err) {
+        setWebhookMetrics(null);
+      } finally {
+        setWebhookMetricsLoading(false);
+      }
+    },
+    [webhookMetricsWindowHours]
+  );
+
   useEffect(() => {
     fetchSnapshot();
     fetchFlagRequests();
-  }, [fetchSnapshot, fetchFlagRequests]);
+    fetchWebhookWorkerStatus();
+  }, [fetchSnapshot, fetchFlagRequests, fetchWebhookWorkerStatus]);
+
+  useEffect(() => {
+    fetchWebhookMetrics();
+  }, [fetchWebhookMetrics]);
 
   useEffect(() => {
     if (!autoRefresh) return undefined;
     const id = window.setInterval(() => {
       fetchSnapshot({ silent: true });
       fetchFlagRequests({ silent: true });
+      fetchWebhookWorkerStatus();
+      fetchWebhookMetrics({ silent: true });
     }, 10000);
     return () => window.clearInterval(id);
-  }, [autoRefresh, fetchSnapshot, fetchFlagRequests]);
+  }, [autoRefresh, fetchSnapshot, fetchFlagRequests, fetchWebhookWorkerStatus, fetchWebhookMetrics]);
 
   const campaignRows = useMemo(() => {
     const q = campaignQuery.trim().toLowerCase();
@@ -312,6 +373,98 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleRetryWebhook = async (deliveryId) => {
+    if (!deliveryId) return;
+    const key = `retry-webhook-${deliveryId}`;
+    setActionState((prev) => ({ ...prev, [key]: true }));
+    setWebhookMessage('');
+    try {
+      await retryAdminWebhookDelivery(deliveryId, { retries: 1 });
+      const [snapshotRes, webhookRes] = await Promise.all([
+        getAdminDashboard({ limit: 30, days: 14, noCache: 1 }),
+        getAdminWebhookDeliveries({ status: 'dead_letter', limit: 5 })
+      ]);
+      if (snapshotRes?.data) setSnapshot(snapshotRes.data);
+      const refreshedCount = (webhookRes?.data?.rows || []).length;
+      setWebhookMessage(
+        refreshedCount > 0
+          ? 'Webhook replay attempted. Queue refreshed with latest dead-letter records.'
+          : 'Webhook replay attempted. Dead-letter queue is now clear.'
+      );
+    } catch (err) {
+      setWebhookMessage(err.response?.data?.message || 'Failed to retry webhook delivery.');
+    } finally {
+      setActionState((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleRunWebhookWorkerTick = async () => {
+    setWebhookWorkerLoading(true);
+    setWebhookMessage('');
+    try {
+      const res = await runAdminWebhookWorkerTick();
+      const runResult = res?.data?.result || {};
+      setWebhookMessage(
+        `Worker tick complete: processed ${Number(runResult.processed || 0)}, success ${Number(runResult.succeeded || 0)}, failed ${Number(runResult.failed || 0)}.`
+      );
+      await Promise.all([
+        fetchSnapshot({ noCache: true }),
+        fetchWebhookWorkerStatus()
+      ]);
+    } catch (err) {
+      setWebhookMessage(err.response?.data?.message || 'Failed to execute webhook worker tick.');
+      await fetchWebhookWorkerStatus();
+    } finally {
+      setWebhookWorkerLoading(false);
+    }
+  };
+
+  const handleExportWebhooks = async () => {
+    setWebhookMessage('');
+    try {
+      const res = await exportAdminWebhooks({
+        format: 'csv',
+        limit: 2000
+      });
+      const contentType = res?.headers?.['content-type'] || 'text/csv';
+      const payloadBlob = res?.data instanceof Blob
+        ? res.data
+        : new Blob([res?.data || ''], { type: contentType });
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadBlob(payloadBlob, `webhooks_export_${stamp}.csv`);
+      setWebhookMessage('Webhook CSV export downloaded.');
+    } catch (err) {
+      setWebhookMessage(err.response?.data?.message || 'Failed to export webhook deliveries.');
+    }
+  };
+
+  const handleWebhookCleanup = async ({ dryRun }) => {
+    setWebhookCleanupLoading(true);
+    setWebhookMessage('');
+    try {
+      const res = await runAdminWebhookCleanup({
+        dryRun,
+        olderThanDays: 30,
+        limit: 2000
+      });
+      const deleted = Number(res?.data?.result?.deleted || 0);
+      const matched = Number(res?.data?.result?.matched || 0);
+      setWebhookMessage(
+        dryRun
+          ? `Cleanup dry run: ${matched} rows would be deleted.`
+          : `Cleanup done: ${deleted} rows deleted (matched ${matched}).`
+      );
+      await Promise.all([
+        fetchSnapshot({ noCache: true }),
+        fetchWebhookMetrics({ silent: true })
+      ]);
+    } catch (err) {
+      setWebhookMessage(err.response?.data?.message || 'Failed to run webhook cleanup.');
+    } finally {
+      setWebhookCleanupLoading(false);
+    }
+  };
+
   const donationSeries = snapshot?.series?.donations || [];
   const volunteerSeries = snapshot?.series?.volunteerApplications || [];
   const generatedAt = snapshot?.generatedAt || null;
@@ -323,6 +476,25 @@ export default function AdminDashboard() {
     rejectedCount: 0
   };
   const supportRequests = snapshot?.supportRequests || [];
+  const webhookSummary = snapshot?.webhooks?.summary || {
+    total: 0,
+    delivered: 0,
+    deadLetter: 0,
+    skipped: 0,
+    replayedSuccess: 0,
+    replayedFailed: 0
+  };
+  const deadLetterWebhooks = snapshot?.webhooks?.deadLetters || [];
+  const workerRuntime = webhookWorkerStatus?.runtime || null;
+  const webhookMetricsSummary = webhookMetrics?.summary || {
+    total: 0,
+    successful: 0,
+    failed: 0,
+    skipped: 0,
+    successRate: 0,
+    avgAttempts: 0
+  };
+  const webhookMetricsByEvent = webhookMetrics?.byEvent || [];
 
   const pendingNgoFlagRequests = useMemo(
     () => (flagRequests || []).filter((req) => String(req?.targetType || '').trim().toLowerCase() === 'ngo'),
@@ -403,7 +575,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
           <div className="bg-white/90 backdrop-blur rounded-xl border border-slate-200 shadow-sm p-5">
             <p className="text-xs font-semibold tracking-wide uppercase text-slate-500">Donations (Completed)</p>
             <p className="text-2xl font-extrabold text-slate-900 mt-2">{formatINR(stats.donationsCompletedTotal)}</p>
@@ -425,6 +597,13 @@ export default function AdminDashboard() {
             <p className="text-xs font-semibold tracking-wide uppercase text-slate-500">Queues</p>
             <p className="text-2xl font-extrabold text-slate-900 mt-2">{formatCount(stats.pendingNgos)}</p>
             <p className="text-sm text-slate-600 mt-1">Pending NGO verifications</p>
+          </div>
+          <div className="bg-white/90 backdrop-blur rounded-xl border border-slate-200 shadow-sm p-5">
+            <p className="text-xs font-semibold tracking-wide uppercase text-slate-500">Webhook Dead-Letter</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-2">{formatCount(stats.webhookDeadLetterCount)}</p>
+            <p className="text-sm text-slate-600 mt-1">
+              {formatCount(stats.webhookDeliveredCount)} delivered / {formatCount(stats.webhookDeliveriesTotal)} total
+            </p>
           </div>
         </section>
 
@@ -475,6 +654,233 @@ export default function AdminDashboard() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+          </div>
+        </section>
+
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-extrabold text-slate-900">Webhook Dead-Letter Queue</h2>
+              <p className="text-sm text-slate-600 mt-1">
+                Failed outbound deliveries with worker controls, replay metrics, and retention actions.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                  webhookWorkerStatus?.enabled
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                }`}
+              >
+                Worker: {webhookWorkerStatus?.enabled ? 'Enabled' : 'Disabled'}
+              </span>
+              {workerRuntime?.active && (
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border bg-slate-50 text-slate-700 border-slate-200">
+                  Last Tick: {when(workerRuntime?.lastTickAt)}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleRunWebhookWorkerTick}
+                disabled={webhookWorkerLoading}
+                className="px-3 py-2 rounded-md bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-60"
+              >
+                {webhookWorkerLoading ? 'Running…' : 'Run Worker Now'}
+              </button>
+              <select
+                value={webhookMetricsWindowHours}
+                onChange={(e) => setWebhookMetricsWindowHours(Number(e.target.value) || 24)}
+                className="px-3 py-2 rounded-md bg-white border border-slate-200 text-slate-800 text-sm font-semibold"
+              >
+                <option value={24}>Metrics: 24h</option>
+                <option value={72}>Metrics: 72h</option>
+                <option value={168}>Metrics: 7d</option>
+              </select>
+              <button
+                type="button"
+                onClick={handleExportWebhooks}
+                className="px-3 py-2 rounded-md bg-white border border-slate-200 text-slate-800 text-sm font-semibold hover:bg-slate-50"
+              >
+                Export CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => handleWebhookCleanup({ dryRun: true })}
+                disabled={webhookCleanupLoading}
+                className="px-3 py-2 rounded-md bg-white border border-slate-200 text-slate-800 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60"
+              >
+                {webhookCleanupLoading ? 'Running…' : 'Dry Cleanup'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleWebhookCleanup({ dryRun: false })}
+                disabled={webhookCleanupLoading}
+                className="px-3 py-2 rounded-md bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 disabled:opacity-60"
+              >
+                Purge 30d
+              </button>
+              <button
+                type="button"
+                onClick={() => fetchSnapshot({ noCache: true })}
+                disabled={refreshing}
+                className="px-3 py-2 rounded-md bg-white border border-slate-200 text-slate-800 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60"
+              >
+                Refresh Queue
+              </button>
+            </div>
+          </div>
+
+          {webhookMessage && (
+            <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">
+              {webhookMessage}
+            </div>
+          )}
+
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Total</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">{formatCount(webhookSummary.total)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Delivered</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">{formatCount(webhookSummary.delivered)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Dead Letter</p>
+              <p className="text-lg font-bold text-rose-700 mt-1">{formatCount(webhookSummary.deadLetter)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Skipped</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">{formatCount(webhookSummary.skipped)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Replayed OK</p>
+              <p className="text-lg font-bold text-emerald-700 mt-1">{formatCount(webhookSummary.replayedSuccess)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Replayed Fail</p>
+              <p className="text-lg font-bold text-amber-700 mt-1">{formatCount(webhookSummary.replayedFailed)}</p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Window Events</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">
+                {formatCount(webhookMetricsSummary.total)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Window Success</p>
+              <p className="text-lg font-bold text-emerald-700 mt-1">
+                {formatCount(webhookMetricsSummary.successful)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Window Failed</p>
+              <p className="text-lg font-bold text-rose-700 mt-1">
+                {formatCount(webhookMetricsSummary.failed)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Success Rate</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">
+                {Number(webhookMetricsSummary.successRate || 0).toFixed(1)}%
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Avg Attempts</p>
+              <p className="text-lg font-bold text-slate-900 mt-1">
+                {Number(webhookMetricsSummary.avgAttempts || 0).toFixed(2)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-slate-200 overflow-hidden">
+            <div className="px-3 py-2 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600 flex items-center justify-between">
+              <span>Event Metrics ({webhookMetricsWindowHours}h)</span>
+              <span>{webhookMetricsLoading ? 'Refreshing…' : `${webhookMetricsByEvent.length} events`}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-white text-slate-700">
+                  <tr>
+                    <th className="text-left px-3 py-2">Event</th>
+                    <th className="text-left px-3 py-2">Total</th>
+                    <th className="text-left px-3 py-2">Success</th>
+                    <th className="text-left px-3 py-2">Failed</th>
+                    <th className="text-left px-3 py-2">Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {webhookMetricsByEvent.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-3 text-slate-500 text-center">
+                        No events in selected window.
+                      </td>
+                    </tr>
+                  ) : (
+                    webhookMetricsByEvent.slice(0, 8).map((row) => (
+                      <tr key={row.event} className="border-t border-slate-100">
+                        <td className="px-3 py-2 text-slate-800 font-medium">{textOrDash(row.event)}</td>
+                        <td className="px-3 py-2 text-slate-700">{formatCount(row.total)}</td>
+                        <td className="px-3 py-2 text-emerald-700">{formatCount(row.successful)}</td>
+                        <td className="px-3 py-2 text-rose-700">{formatCount(row.failed)}</td>
+                        <td className="px-3 py-2 text-slate-700">{Number(row.successRate || 0).toFixed(1)}%</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-slate-700">
+                <tr>
+                  <th className="text-left px-3 py-2">Event</th>
+                  <th className="text-left px-3 py-2">Reason</th>
+                  <th className="text-left px-3 py-2">Attempts</th>
+                  <th className="text-left px-3 py-2">Last Attempt</th>
+                  <th className="text-left px-3 py-2">Next Retry</th>
+                  <th className="text-left px-3 py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deadLetterWebhooks.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                      No dead-letter webhooks right now.
+                    </td>
+                  </tr>
+                ) : (
+                  deadLetterWebhooks.map((item) => {
+                    const retryKey = `retry-webhook-${item.id}`;
+                    return (
+                      <tr key={item.id} className="border-t border-slate-100">
+                        <td className="px-3 py-2 text-slate-800 font-medium">{textOrDash(item.event)}</td>
+                        <td className="px-3 py-2 text-slate-700">{textOrDash(item.failureReason || item.replay?.reason)}</td>
+                        <td className="px-3 py-2 text-slate-700">{formatCount(item.attempts || 0)}</td>
+                        <td className="px-3 py-2 text-slate-700">{when(item.lastAttemptAt)}</td>
+                        <td className="px-3 py-2 text-slate-700">{when(item.nextRetryAt)}</td>
+                        <td className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => handleRetryWebhook(item.id)}
+                            disabled={Boolean(actionState[retryKey])}
+                            className="px-3 py-1.5 rounded-md bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-60"
+                          >
+                            {actionState[retryKey] ? 'Retrying…' : 'Retry'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
 

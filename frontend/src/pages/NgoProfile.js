@@ -88,6 +88,7 @@ export default function NgoProfile() {
   const role = getUserRole();
   const isAdmin = role === 'admin';
   const isUser = role === 'user';
+  const isNgo = role === 'ngo';
 
   useEffect(() => {
     setLoading(true);
@@ -202,6 +203,27 @@ export default function NgoProfile() {
     }));
   }, [ngoViewData, campaigns]);
 
+  const displayMembers = useMemo(() => {
+    if (!Array.isArray(ngoViewData?.members)) return [];
+    return ngoViewData.members
+      .map((member, index) => {
+        if (!member || typeof member !== 'object') return null;
+        const name = String(member.name || '').trim();
+        if (!name) return null;
+        const roleName = String(member.role || '').trim();
+        const contributions = String(member.contributions || '').trim();
+        const tasksCompleted = Number(member.tasksCompleted);
+        return {
+          id: member.id || `member-${index}`,
+          name,
+          role: roleName,
+          contributions,
+          tasksCompleted: Number.isFinite(tasksCompleted) && tasksCompleted >= 0 ? Math.floor(tasksCompleted) : 0
+        };
+      })
+      .filter(Boolean);
+  }, [ngoViewData]);
+
   const displayImpactMetrics = useMemo(() => {
     const fromNgo = uniqueNonEmpty(ngoViewData?.impactMetrics || []);
     if (fromNgo.length > 0) return fromNgo;
@@ -274,12 +296,59 @@ export default function NgoProfile() {
     return inferred;
   }, [ngoViewData, campaigns]);
 
+  const displayTeamStrengthList = useMemo(() => {
+    const fromNgo = Array.isArray(ngoViewData?.teamStrengthList) ? ngoViewData.teamStrengthList : [];
+    const normalizedFromNgo = fromNgo
+      .map((entry, index) => {
+        if (!entry || typeof entry !== 'object') return null;
+        const role = String(entry.role || '').trim();
+        const contribution = String(entry.contribution || '').trim();
+        const count = Number(entry.count || 0);
+        if (!role || !Number.isFinite(count) || count <= 0) return null;
+        return {
+          id: `team-strength-${index}-${role.toLowerCase().replace(/\s+/g, '-')}`,
+          role,
+          count: Math.floor(count),
+          contribution
+        };
+      })
+      .filter(Boolean);
+    if (normalizedFromNgo.length > 0) return normalizedFromNgo;
+
+    if (displayMembers.length > 0) {
+      const grouped = new Map();
+      displayMembers.forEach((member) => {
+        const role = String(member.role || 'General Team').trim();
+        if (!grouped.has(role)) {
+          grouped.set(role, {
+            id: `derived-${role.toLowerCase().replace(/\s+/g, '-')}`,
+            role,
+            count: 0,
+            contribution: ''
+          });
+        }
+        const row = grouped.get(role);
+        row.count += 1;
+        if (!row.contribution && member.contributions) {
+          row.contribution = member.contributions;
+        }
+      });
+      return Array.from(grouped.values()).sort((a, b) => b.count - a.count);
+    }
+
+    return [];
+  }, [ngoViewData, displayMembers]);
+
   const aboutText = ngoViewData?.about || ngoViewData?.description || 'Detailed information about this NGO is not available yet.';
   const visionText = ngoViewData?.vision || ngoViewData?.mission || 'Vision details are currently unavailable.';
   const impactText = ngoViewData?.impact || (displayImpactMetrics.length > 0
     ? displayImpactMetrics.slice(0, 3).join('. ')
     : 'Impact summary is currently unavailable.');
   const missionText = ngoViewData?.mission || ngoViewData?.description;
+  const transparencyScoreValue = Number(ngoViewData?.transparencyScore?.score || 0);
+  const transparencyGrade = String(
+    ngoViewData?.transparencyScore?.grade || ngoViewData?.transparency || ''
+  ).trim();
 
   const programSpendShare = useMemo(() => {
     const program = Number(ngoViewData?.financials?.program || 0);
@@ -340,6 +409,10 @@ export default function NgoProfile() {
   };
 
   const handleFlagNgo = async () => {
+    if (isNgo) {
+      setFlagMessage('NGO accounts cannot request admin review.');
+      return;
+    }
     if (!isAdmin && !isUser) {
       setFlagMessage('Please login to submit a request.');
       return;
@@ -413,6 +486,16 @@ export default function NgoProfile() {
                       Verified
                     </span>
                   )}
+                  {transparencyScoreValue > 0 && (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800">
+                      Transparency Score: {transparencyScoreValue}
+                    </span>
+                  )}
+                  {transparencyGrade && (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-purple-100 text-purple-800">
+                      {String(transparencyGrade).toUpperCase()}
+                    </span>
+                  )}
                   {displayCategories.map((cat, idx) => (
                     <span key={`${cat}-${idx}`} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-800">
                       {cat}
@@ -457,7 +540,7 @@ export default function NgoProfile() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
           <div className="bg-white rounded-lg border p-4">
             <p className="text-xs text-gray-500 uppercase tracking-wide">Programs</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{displayPrograms.length}</p>
@@ -473,6 +556,13 @@ export default function NgoProfile() {
           <div className="bg-white rounded-lg border p-4">
             <p className="text-xs text-gray-500 uppercase tracking-wide">Program Spend</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{programSpendShare}%</p>
+          </div>
+          <div className="bg-white rounded-lg border p-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Transparency</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">
+              {transparencyScoreValue > 0 ? `${transparencyScoreValue}/100` : 'N/A'}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">{transparencyGrade || 'Developing'}</p>
           </div>
         </div>
 
@@ -492,21 +582,36 @@ export default function NgoProfile() {
               <h2 className="text-lg font-semibold text-gray-800">Report This NGO</h2>
               {ngo.flagged && <span className="text-sm text-red-600 font-semibold">Flagged</span>}
             </div>
+            {isNgo && (
+              <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                NGO accounts cannot submit admin review requests.
+              </div>
+            )}
             <textarea
               value={flagReason}
               onChange={(e) => setFlagReason(e.target.value)}
               placeholder="Reason for reporting (optional)"
               className="w-full border border-gray-300 rounded-md p-2 mb-3"
               rows={3}
-              disabled={ngo.flagged}
+              disabled={ngo.flagged || isNgo}
             />
             <button
               type="button"
               onClick={() => setFlagModalOpen(true)}
-              disabled={flagLoading || ngo.flagged}
+              disabled={flagLoading || ngo.flagged || isNgo}
               className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-red-300"
             >
-              {ngo.flagged ? 'Already Flagged' : flagLoading ? 'Submitting...' : isAdmin ? 'Flag NGO' : 'Request Admin Review'}
+              {ngo.flagged
+                ? 'Already Flagged'
+                : flagLoading
+                  ? 'Submitting...'
+                  : isAdmin
+                    ? 'Flag NGO'
+                    : isUser
+                      ? 'Request Admin Review'
+                      : isNgo
+                        ? 'Unavailable for NGO accounts'
+                        : 'Login to Request Review'}
             </button>
           </div>
 
@@ -571,6 +676,53 @@ export default function NgoProfile() {
                   </div>
                 ) : (
                   <p className="text-gray-600">No program details available.</p>
+                )}
+              </div>
+
+              <div className="bg-white p-8 rounded-lg shadow">
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">Team Members</h2>
+                {displayMembers.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {displayMembers.map((member) => (
+                      <div key={member.id} className="border rounded-lg p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="font-semibold text-gray-900">{member.name}</h3>
+                          <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full">
+                            Tasks: {member.tasksCompleted}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 mt-2">Role: {member.role || 'Not specified'}</p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Contributions: {member.contributions || 'Not specified'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-600">Member details are not available yet.</p>
+                )}
+              </div>
+
+              <div className="bg-white p-8 rounded-lg shadow">
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">Team Strength Breakdown</h2>
+                {displayTeamStrengthList.length > 0 ? (
+                  <div className="space-y-3">
+                    {displayTeamStrengthList.map((entry) => (
+                      <div key={entry.id} className="border rounded-lg p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="font-semibold text-gray-900">{entry.role}</h3>
+                          <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full">
+                            {entry.count} members
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 mt-2">
+                          {entry.contribution || 'Contribution details are not documented yet.'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-600">Team strength details are not available yet.</p>
                 )}
               </div>
 
@@ -761,13 +913,15 @@ export default function NgoProfile() {
 
       <ConfirmModal
         open={flagModalOpen}
-        title={isAdmin ? 'Flag NGO' : 'Request Admin Review'}
+        title={isAdmin ? 'Flag NGO' : isUser ? 'Request Admin Review' : 'Report NGO'}
         description={
           isAdmin
             ? 'This will mark the NGO as flagged and visible to admins.'
-            : 'Your request will be sent to the admin team for review.'
+            : isUser
+              ? 'Your request will be sent to the admin team for review.'
+              : 'Only user accounts can request admin review.'
         }
-        confirmLabel={isAdmin ? 'Flag NGO' : 'Send Request'}
+        confirmLabel={isAdmin ? 'Flag NGO' : isUser ? 'Send Request' : 'Submit'}
         onConfirm={handleFlagNgo}
         onCancel={() => setFlagModalOpen(false)}
         loading={flagLoading}

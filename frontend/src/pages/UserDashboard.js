@@ -21,8 +21,10 @@ import {
   getMyCampaignVolunteerRegistrations,
   getMyHelpRequests,
   getMyVolunteerApplications,
-  getUserPreferences
+  getUserPreferences,
+  trackNotificationEngagement
 } from '../services/api';
+import { getTokenPayload } from '../utils/auth';
 
 const getCertificateId = (entity) => {
   const certificate = entity?.certificate;
@@ -169,15 +171,8 @@ export default function UserDashboard() {
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setUser(payload);
-      } catch (err) {
-        setUser(null);
-      }
-    }
+    const payload = getTokenPayload();
+    setUser(payload || null);
 
     api.get('/campaigns')
       .then((res) => {
@@ -258,6 +253,13 @@ export default function UserDashboard() {
     } finally {
       setHelpRefreshing(false);
     }
+  };
+
+  const handleNotificationClick = (notificationId) => {
+    if (!notificationId) return;
+    trackNotificationEngagement(notificationId, { action: 'click' }).catch(() => {
+      // Non-blocking analytics event
+    });
   };
 
   const handleGetRecommendations = () => {
@@ -528,7 +530,7 @@ export default function UserDashboard() {
         <section className="bg-white rounded-lg shadow p-6 mb-8 border border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-1">Contribution Actions</h2>
           <p className="text-sm text-gray-600 mb-5">Use dedicated workflows for secure donations and volunteering.</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Link to="/donate" className="rounded-lg border border-gray-200 p-4 hover:border-indigo-300 hover:bg-indigo-50/40 transition">
               <p className="font-semibold text-gray-900">Donate to Campaigns</p>
               <p className="text-sm text-gray-600 mt-1">Open full payment flow with receipts and approval tracking.</p>
@@ -540,6 +542,10 @@ export default function UserDashboard() {
             <Link to="/campaigns" className="rounded-lg border border-gray-200 p-4 hover:border-indigo-300 hover:bg-indigo-50/40 transition">
               <p className="font-semibold text-gray-900">Browse Campaigns</p>
               <p className="text-sm text-gray-600 mt-1">Review campaign updates, impact, and organizer details.</p>
+            </Link>
+            <Link to="/innovation-center" className="rounded-lg border border-gray-200 p-4 hover:border-indigo-300 hover:bg-indigo-50/40 transition">
+              <p className="font-semibold text-gray-900">Innovation Center</p>
+              <p className="text-sm text-gray-600 mt-1">Join giving circles, pledge in-kind items, and track your points.</p>
             </Link>
           </div>
         </section>
@@ -943,6 +949,15 @@ export default function UserDashboard() {
                     <span className="text-xs text-gray-500">{new Date(note.createdAt).toLocaleString()}</span>
                   </div>
                   <p className="text-sm text-gray-700 mt-1">{note.message}</p>
+                  {note.notificationType === 'campaign_update' && note.campaignId && (
+                    <Link
+                      to={`/campaigns/${note.campaignId}`}
+                      onClick={() => handleNotificationClick(note.id)}
+                      className="inline-block mt-2 text-xs font-semibold text-indigo-600 hover:underline"
+                    >
+                      View Campaign Update
+                    </Link>
+                  )}
                 </div>
               ))}
             </div>

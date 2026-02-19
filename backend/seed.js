@@ -5,6 +5,9 @@ const NGO = require('./src/models/NGO');
 const Campaign = require('./src/models/Campaign');
 const VolunteerOpportunity = require('./src/models/VolunteerOpportunity');
 const Category = require('./src/models/Category');
+const { query } = require('./src/db/postgres');
+const { generateId } = require('./src/db/id');
+const { awardPoints } = require('./src/utils/gamification');
 const connectDB = require('./src/config/db');
 
 faker.seed(2026);
@@ -19,6 +22,290 @@ const buildFinancials = ({ baseIncome, baseExpense }) => {
   const nonProgram = Math.round(latestExpense * 0.19);
   const program = Math.max(latestExpense - nonProgram, 0);
   return { years, income, expenses, nonProgram, program };
+};
+
+const teamStrengthTemplates = [
+  {
+    role: 'Leadership & Governance',
+    ratio: 0.08,
+    contributionTemplate: 'Defines strategic direction and governance for {{focus}} programs.'
+  },
+  {
+    role: 'Program Management',
+    ratio: 0.18,
+    contributionTemplate: 'Designs and tracks delivery milestones across {{focus}} initiatives.'
+  },
+  {
+    role: 'Field Operations',
+    ratio: 0.24,
+    contributionTemplate: 'Executes on-ground implementation and quality assurance for beneficiaries.'
+  },
+  {
+    role: 'Volunteer Network',
+    ratio: 0.30,
+    contributionTemplate: 'Mobilizes volunteers and coordinates community events and outreach drives.'
+  },
+  {
+    role: 'Partnerships & Fundraising',
+    ratio: 0.12,
+    contributionTemplate: 'Builds donor, CSR, and partner relationships to sustain programs.'
+  },
+  {
+    role: 'Finance & Compliance',
+    ratio: 0.08,
+    contributionTemplate: 'Maintains financial discipline, reporting, and statutory compliance workflows.'
+  }
+];
+
+const growPriorityOrder = [3, 2, 1, 4, 5, 0];
+const shrinkPriorityOrder = [5, 4, 0, 1, 2, 3];
+
+const normalizeCount = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return Math.floor(parsed);
+};
+
+const rebalanceCountsToTotal = (counts, total) => {
+  const safeCounts = counts.map((count) => Math.max(0, normalizeCount(count)));
+  let current = safeCounts.reduce((sum, value) => sum + value, 0);
+
+  let growCursor = 0;
+  while (current < total) {
+    const targetIndex = growPriorityOrder[growCursor % growPriorityOrder.length];
+    safeCounts[targetIndex] += 1;
+    current += 1;
+    growCursor += 1;
+  }
+
+  let shrinkCursor = 0;
+  while (current > total) {
+    const targetIndex = shrinkPriorityOrder[shrinkCursor % shrinkPriorityOrder.length];
+    if (safeCounts[targetIndex] > 1) {
+      safeCounts[targetIndex] -= 1;
+      current -= 1;
+    }
+    shrinkCursor += 1;
+    if (shrinkCursor > 1000) break;
+  }
+
+  return safeCounts;
+};
+
+const buildTeamStrengthList = ({ orgStrength, categories = [] }) => {
+  const total = normalizeCount(orgStrength);
+  if (total <= 0) return [];
+
+  const categoryFocus = String(categories[0] || 'community').toLowerCase();
+
+  if (total <= teamStrengthTemplates.length) {
+    return teamStrengthTemplates.slice(0, total).map((item) => ({
+      role: item.role,
+      count: 1,
+      contribution: item.contributionTemplate.replace('{{focus}}', categoryFocus)
+    }));
+  }
+
+  const rawCounts = teamStrengthTemplates.map((item) => Math.max(1, Math.floor(total * item.ratio)));
+  const counts = rebalanceCountsToTotal(rawCounts, total);
+
+  return teamStrengthTemplates.map((item, index) => ({
+    role: item.role,
+    count: counts[index],
+    contribution: item.contributionTemplate.replace('{{focus}}', categoryFocus)
+  }));
+};
+
+const uniqueNonEmpty = (items = []) => [...new Set((items || []).map((item) => String(item || '').trim()).filter(Boolean))];
+
+const campaignTaskFallbacks = [
+  'Beneficiary Outreach',
+  'Field Documentation',
+  'Program Delivery',
+  'Volunteer Coordination',
+  'Impact Reporting',
+  'Community Mobilization'
+];
+
+const buildMembersForNgoSeed = (seed, campaignTitles = []) => {
+  const categoryFocus = String(seed.categories?.[0] || 'community impact').toLowerCase();
+  const leadershipMembers = Array.isArray(seed.leadership)
+    ? seed.leadership.map((leader) => ({
+        id: generateId(),
+        name: leader.name,
+        role: leader.role,
+        tasksCompleted: faker.number.int({ min: 26, max: 96 }),
+        contributions: `Leads ${categoryFocus} strategy, team alignment, and governance reviews.`,
+        tasks: ['Strategic Planning', 'Program Review', 'Stakeholder Governance'],
+        campaignAssignments: faker.helpers.arrayElements(campaignTitles, Math.min(2, campaignTitles.length)).map((campaignTitle) => ({
+          campaignId: '',
+          campaignTitle,
+          task: 'Strategic Review',
+          contribution: `Reviewed milestones and risk plans for ${campaignTitle}.`
+        })),
+        joinedAt: faker.date.between({ from: '2017-01-01', to: '2023-12-31' }).toISOString()
+      }))
+    : [];
+
+  const operationalRoleTemplates = [
+    {
+      role: 'Program Manager',
+      contribution: `Coordinates program timelines, outcome tracking, and field delivery for ${categoryFocus} work.`,
+      taskPool: ['Program Planning', 'Milestone Tracking', 'Campaign Coordination', 'Impact Review']
+    },
+    {
+      role: 'Field Coordinator',
+      contribution: 'Manages local implementation logistics and beneficiary communication on the ground.',
+      taskPool: ['Field Visit', 'Beneficiary Follow-up', 'Local Logistics', 'Issue Escalation']
+    },
+    {
+      role: 'Volunteer Coordinator',
+      contribution: 'Recruits and schedules volunteers, and ensures volunteers are mapped to priority tasks.',
+      taskPool: ['Volunteer Onboarding', 'Shift Scheduling', 'Volunteer Support', 'Attendance Tracking']
+    },
+    {
+      role: 'Partnership Associate',
+      contribution: 'Supports CSR and community partnerships, donor reporting, and collaboration follow-ups.',
+      taskPool: ['Partner Follow-up', 'Donor Reporting', 'CSR Coordination', 'Community Liaison']
+    },
+    {
+      role: 'Monitoring & Evaluation Associate',
+      contribution: 'Tracks activity outputs, documents impact evidence, and maintains monthly reporting snapshots.',
+      taskPool: ['Data Validation', 'Outcome Measurement', 'Impact Documentation', 'Dashboard Update']
+    },
+    {
+      role: 'Finance & Compliance Associate',
+      contribution: 'Supports budgeting, utilization reports, and statutory compliance documentation.',
+      taskPool: ['Budget Tracking', 'Compliance Filing', 'Audit Preparation', 'Utilization Reporting']
+    }
+  ];
+
+  const orgStrength = normalizeCount(seed.orgStrength);
+  const operationalMemberCount = Math.max(14, Math.min(32, Math.round(orgStrength * 0.16)));
+  const generatedMembers = Array.from({ length: operationalMemberCount }, (_, index) => {
+    const template = operationalRoleTemplates[index % operationalRoleTemplates.length];
+    const isVolunteerRole = String(template.role).toLowerCase().includes('volunteer');
+    const availableTasks = uniqueNonEmpty([...template.taskPool, ...campaignTaskFallbacks]);
+    const memberTasks = faker.helpers.arrayElements(
+      availableTasks,
+      faker.number.int({ min: 2, max: Math.min(4, availableTasks.length) })
+    );
+    const assignmentTitles = faker.helpers.arrayElements(
+      campaignTitles,
+      Math.min(campaignTitles.length, faker.number.int({ min: 1, max: Math.min(3, campaignTitles.length || 1) }))
+    );
+    const campaignAssignments = assignmentTitles.map((campaignTitle) => {
+      const task = faker.helpers.arrayElement(uniqueNonEmpty([...memberTasks, ...availableTasks]));
+      return {
+        campaignId: '',
+        campaignTitle,
+        task,
+        contribution: `Contributed to ${task.toLowerCase()} for ${campaignTitle} and supported delivery outcomes.`
+      };
+    });
+    return {
+      id: generateId(),
+      name: faker.person.fullName(),
+      role: template.role,
+      tasksCompleted: isVolunteerRole
+        ? faker.number.int({ min: 8, max: 42 })
+        : faker.number.int({ min: 16, max: 88 }),
+      contributions: template.contribution,
+      tasks: memberTasks,
+      campaignAssignments,
+      joinedAt: faker.date.between({ from: '2019-01-01', to: '2025-06-01' }).toISOString()
+    };
+  });
+
+  return [...leadershipMembers, ...generatedMembers];
+};
+
+const buildCampaignTaskPool = (campaign) =>
+  uniqueNonEmpty([
+    ...(Array.isArray(campaign?.volunteersNeeded) ? campaign.volunteersNeeded : []),
+    ...campaignTaskFallbacks
+  ]);
+
+const assignMockMembersToCampaignsAndBadges = async ({ createdNgos, createdCampaigns }) => {
+  const campaignsByNgoId = new Map();
+  const normalizedCampaigns = (createdCampaigns || []).map((campaign) => ({
+    id: String(campaign?.id || '').trim(),
+    ngoId: String(campaign?.ngo || '').trim(),
+    title: String(campaign?.title || '').trim(),
+    volunteersNeeded: Array.isArray(campaign?.volunteersNeeded) ? campaign.volunteersNeeded : []
+  }));
+
+  normalizedCampaigns.forEach((campaign) => {
+    if (!campaign.id) return;
+    const ngoId = campaign.ngoId;
+    if (!campaignsByNgoId.has(ngoId)) campaignsByNgoId.set(ngoId, []);
+    campaignsByNgoId.get(ngoId).push(campaign);
+  });
+
+  const fallbackCampaignPool = normalizedCampaigns.filter((campaign) => campaign.id);
+  const monthLabel = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+  let updatedNgoCount = 0;
+  let updatedMemberCount = 0;
+
+  for (const ngo of createdNgos || []) {
+    const members = Array.isArray(ngo?.members) ? ngo.members : [];
+    if (members.length === 0) continue;
+
+    const ngoCampaignPool = campaignsByNgoId.get(String(ngo?.id || '').trim()) || fallbackCampaignPool;
+    const membersWithAssignments = members.map((member) => {
+      const existingTasks = uniqueNonEmpty(Array.isArray(member?.tasks) ? member.tasks : []);
+      const assignmentCap = Math.min(3, ngoCampaignPool.length);
+      const assignmentCount = assignmentCap > 0 ? faker.number.int({ min: 1, max: assignmentCap }) : 0;
+      const selectedCampaigns = assignmentCount > 0 ? faker.helpers.arrayElements(ngoCampaignPool, assignmentCount) : [];
+
+      const campaignAssignments = selectedCampaigns.map((campaign) => {
+        const taskPool = uniqueNonEmpty([...existingTasks, ...buildCampaignTaskPool(campaign)]);
+        const task = taskPool.length > 0 ? faker.helpers.arrayElement(taskPool) : 'Program Delivery';
+        return {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title || 'Campaign',
+          task,
+          contribution: `Supported ${campaign.title || 'campaign'} through ${task.toLowerCase()} and on-ground execution.`
+        };
+      });
+
+      return {
+        ...member,
+        campaignAssignments
+      };
+    });
+
+    const topTasksCompleted = membersWithAssignments.reduce(
+      (max, member) => Math.max(max, normalizeCount(member?.tasksCompleted)),
+      0
+    );
+
+    const membersWithBadges = membersWithAssignments.map((member) => {
+      const memberTasksCompleted = normalizeCount(member?.tasksCompleted);
+      const badges = uniqueNonEmpty(Array.isArray(member?.badges) ? member.badges : []);
+      if (topTasksCompleted > 0 && memberTasksCompleted === topTasksCompleted) {
+        badges.push(`Member of the Month (${monthLabel})`);
+        badges.push('Maximum Tasks Champion');
+      }
+      if (Array.isArray(member?.campaignAssignments) && member.campaignAssignments.length > 0) {
+        badges.push('Campaign Contributor');
+      }
+      return {
+        ...member,
+        badges: uniqueNonEmpty(badges)
+      };
+    });
+
+    ngo.members = membersWithBadges;
+    await ngo.save();
+    updatedNgoCount += 1;
+    updatedMemberCount += membersWithBadges.length;
+  }
+
+  console.log(
+    `✅ Updated ${updatedMemberCount} members across ${updatedNgoCount} NGOs with random campaign assignments and task badges`
+  );
 };
 
 const ngoSeeds = [
@@ -1899,6 +2186,24 @@ const campaignSeeds = [
   }
 ];
 
+const campaignTitlesByNgoSlug = campaignSeeds.reduce((acc, campaign) => {
+  const slug = String(campaign?.ngoSlug || '').trim();
+  if (!slug) return acc;
+  if (!acc[slug]) acc[slug] = [];
+  acc[slug].push(String(campaign?.title || '').trim());
+  acc[slug] = uniqueNonEmpty(acc[slug]);
+  return acc;
+}, {});
+
+const ngoSeedsWithTeamData = ngoSeeds.map((seed) => ({
+  ...seed,
+  teamStrengthList: buildTeamStrengthList({
+    orgStrength: seed.orgStrength,
+    categories: seed.categories
+  }),
+  members: buildMembersForNgoSeed(seed, campaignTitlesByNgoSlug[seed.slug] || [])
+}));
+
 const sampleUsers = [
   { name: 'Rahul Kumar', email: 'rahul@example.com', mobileNumber: '9999999999', location: 'Koramangala, Bengaluru, Karnataka' },
   { name: 'Ananya Reddy', email: 'ananya.reddy@example.com', mobileNumber: '9886512345', location: 'Indiranagar, Bengaluru, Karnataka' },
@@ -1974,17 +2279,894 @@ const buildVolunteerApplicants = (users, includeRahul = false) => {
   return [...new Set(ids)];
 };
 
+const nowIso = () => new Date().toISOString();
+const daysAgoIso = (days) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+const addInnovationSeedData = async ({ createdUsers, createdNgos, createdCampaigns, createdOpportunities }) => {
+  const rahulUser = createdUsers.find((user) => user.email === 'rahul@example.com') || createdUsers[0];
+  const otherUsers = createdUsers.filter((user) => String(user.id) !== String(rahulUser?.id));
+  const donorUsers = [rahulUser, ...otherUsers.slice(0, 5)].filter(Boolean);
+  const corporateOwner = otherUsers[5] || otherUsers[0] || rahulUser;
+
+  const primaryNgo = createdNgos.find((ngo) => ngo.email === ngoSeedsWithTeamData[0].email) || createdNgos[0];
+  const secondaryNgo = createdNgos.find((ngo) => String(ngo.id) !== String(primaryNgo?.id)) || createdNgos[0];
+  const primaryCampaign = createdCampaigns.find((campaign) => String(campaign.ngo) === String(primaryNgo?.id)) || createdCampaigns[0];
+  const secondaryCampaign = createdCampaigns.find((campaign) => String(campaign.id) !== String(primaryCampaign?.id)) || createdCampaigns[0];
+  const primaryOpportunity = createdOpportunities.find((opportunity) => String(opportunity.ngo) === String(primaryNgo?.id)) || createdOpportunities[0];
+
+  if (!rahulUser || !primaryNgo || !primaryCampaign || !primaryOpportunity) {
+    console.log('⚠️ Skipping innovation seed data: core entities not found');
+    return;
+  }
+
+  const userExternalIds = [...new Set([corporateOwner.id, ...donorUsers.map((user) => user.id)].map((id) => String(id)))];
+  const ngoExternalIds = [...new Set([primaryNgo.id, secondaryNgo?.id].filter(Boolean).map((id) => String(id)))];
+  const campaignExternalIds = [...new Set([primaryCampaign.id, secondaryCampaign?.id].filter(Boolean).map((id) => String(id)))];
+  const opportunityExternalIds = [...new Set([primaryOpportunity.id].filter(Boolean).map((id) => String(id)))];
+
+  const [userRowsRes, ngoRowsRes, campaignRowsRes, opportunityRowsRes] = await Promise.all([
+    query(`SELECT id, external_id, source_doc FROM users_rel WHERE external_id = ANY($1::text[])`, [userExternalIds]),
+    query(`SELECT id, external_id, source_doc FROM ngos_rel WHERE external_id = ANY($1::text[])`, [ngoExternalIds]),
+    query(`SELECT id, external_id, source_doc, current_amount FROM campaigns_rel WHERE external_id = ANY($1::text[])`, [campaignExternalIds]),
+    query(`SELECT id, external_id, source_doc FROM volunteer_opportunities_rel WHERE external_id = ANY($1::text[])`, [opportunityExternalIds])
+  ]);
+
+  const userByExternalId = new Map(userRowsRes.rows.map((row) => [String(row.external_id), row]));
+  const ngoByExternalId = new Map(ngoRowsRes.rows.map((row) => [String(row.external_id), row]));
+  const campaignByExternalId = new Map(campaignRowsRes.rows.map((row) => [String(row.external_id), row]));
+  const opportunityByExternalId = new Map(opportunityRowsRes.rows.map((row) => [String(row.external_id), row]));
+
+  const primaryNgoRow = ngoByExternalId.get(String(primaryNgo.id));
+  const secondaryNgoRow = ngoByExternalId.get(String(secondaryNgo?.id));
+  const primaryCampaignRow = campaignByExternalId.get(String(primaryCampaign.id));
+  const secondaryCampaignRow = campaignByExternalId.get(String(secondaryCampaign?.id));
+  const primaryOpportunityRow = opportunityByExternalId.get(String(primaryOpportunity.id));
+
+  if (!primaryNgoRow || !primaryCampaignRow || !primaryOpportunityRow) {
+    console.log('⚠️ Skipping innovation seed data: relational mappings missing');
+    return;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Seed completed donations used by CRM, impact, matching, and recommendations
+  // ---------------------------------------------------------------------------
+  const donationAmounts = [1800, 2500, 3200, 1500, 4200, 2800];
+  const donationRows = [];
+  let donationTotal = 0;
+
+  for (let index = 0; index < donorUsers.length; index += 1) {
+    const donor = donorUsers[index];
+    const donorRow = userByExternalId.get(String(donor.id));
+    if (!donorRow) continue;
+
+    const amount = donationAmounts[index % donationAmounts.length];
+    donationTotal += amount;
+    const createdAt = daysAgoIso(60 - index * 7);
+    const donationId = generateId();
+    const receiptNumber = `RCP-SEED-${Date.now()}-${index + 1}`;
+    const donationDoc = {
+      id: donationId,
+      user: String(donor.id),
+      ngo: String(primaryNgo.id),
+      campaign: String(primaryCampaign.id),
+      amount,
+      currency: 'INR',
+      paymentMethod: 'upi',
+      donorName: donor.name,
+      donorEmail: donor.email,
+      donorPhone: donor.mobileNumber || '9999999999',
+      message: 'Seed donation for innovation features',
+      status: 'completed',
+      transactionId: `seed_txn_${index + 1}`,
+      gatewayProvider: 'mock',
+      gatewayOrderId: `seed_order_${index + 1}`,
+      gatewayPaymentId: `seed_payment_${index + 1}`,
+      receiptNumber,
+      receiptIssuedAt: createdAt,
+      paymentVerifiedAt: createdAt,
+      certificateApprovalStatus: 'pending',
+      certificateApprovalRequestedAt: createdAt,
+      createdAt,
+      updatedAt: createdAt
+    };
+
+    const insertRes = await query(
+      `
+      INSERT INTO donations_rel (
+        external_id,
+        user_id,
+        ngo_id,
+        campaign_id,
+        amount,
+        currency,
+        payment_method,
+        donor_name,
+        donor_email,
+        donor_phone,
+        message,
+        payment_meta,
+        status,
+        transaction_id,
+        gateway_provider,
+        gateway_order_id,
+        gateway_payment_id,
+        payment_verified_at,
+        receipt_number,
+        receipt_issued_at,
+        certificate_approval_status,
+        certificate_approval_requested_at,
+        created_at,
+        updated_at,
+        source_doc
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, 'INR', 'upi', $6, $7, $8, $9, '{}'::jsonb, 'completed',
+        $10, 'mock', $11, $12, $13::timestamptz, $14, $15::timestamptz, 'pending', $16::timestamptz,
+        $17::timestamptz, $17::timestamptz, $18::jsonb
+      )
+      RETURNING id, external_id
+      `,
+      [
+        donationId,
+        donorRow.id,
+        primaryNgoRow.id,
+        primaryCampaignRow.id,
+        amount,
+        donor.name,
+        donor.email,
+        donor.mobileNumber || '9999999999',
+        donationDoc.message,
+        donationDoc.transactionId,
+        donationDoc.gatewayOrderId,
+        donationDoc.gatewayPaymentId,
+        createdAt,
+        receiptNumber,
+        createdAt,
+        createdAt,
+        createdAt,
+        JSON.stringify(donationDoc)
+      ]
+    );
+
+    donationRows.push({
+      dbId: insertRes.rows[0].id,
+      id: donationId,
+      donorUserId: donor.id,
+      donorDbId: donorRow.id,
+      amount
+    });
+  }
+
+  const primaryCampaignDoc =
+    primaryCampaignRow.source_doc && typeof primaryCampaignRow.source_doc === 'object'
+      ? { ...primaryCampaignRow.source_doc }
+      : {};
+  const updatedCampaignAmount = Number(primaryCampaignRow.current_amount || primaryCampaignDoc.currentAmount || 0) + donationTotal;
+  primaryCampaignDoc.currentAmount = updatedCampaignAmount;
+  primaryCampaignDoc.updatedAt = nowIso();
+  await query(
+    `
+    UPDATE campaigns_rel
+    SET current_amount = $2,
+        updated_at = NOW(),
+        source_doc = $3::jsonb
+    WHERE id = $1
+    `,
+    [primaryCampaignRow.id, updatedCampaignAmount, JSON.stringify(primaryCampaignDoc)]
+  );
+
+  // -------------------------------------------------------
+  // Giving circle + members + circle contributions
+  // -------------------------------------------------------
+  const circleOwner = userByExternalId.get(String(rahulUser.id));
+  const secondDonor = userByExternalId.get(String(donorUsers[1]?.id));
+  const givingCircleId = generateId();
+  const givingCircleDoc = {
+    id: givingCircleId,
+    name: 'Bengaluru Weekend Giving Circle',
+    description: 'Friends pooling contributions for sustained campaign support.',
+    campaignId: String(primaryCampaign.id),
+    ownerUserId: String(rahulUser.id),
+    goalAmount: 50000,
+    currentAmount: 2000,
+    status: 'active',
+    createdAt: daysAgoIso(30),
+    updatedAt: nowIso()
+  };
+
+  const givingCircleInsert = await query(
+    `
+    INSERT INTO giving_circles_rel (
+      external_id, owner_user_id, campaign_id, goal_amount, current_amount, status, source_doc
+    ) VALUES ($1, $2, $3, $4, $5, 'active', $6::jsonb)
+    RETURNING id
+    `,
+    [
+      givingCircleId,
+      circleOwner?.id || null,
+      primaryCampaignRow.id,
+      givingCircleDoc.goalAmount,
+      givingCircleDoc.currentAmount,
+      JSON.stringify(givingCircleDoc)
+    ]
+  );
+  const givingCircleDbId = givingCircleInsert.rows[0].id;
+
+  const circleMembers = [
+    { user: circleOwner, role: 'owner' },
+    { user: secondDonor, role: 'member' }
+  ].filter((entry) => entry.user);
+  for (const member of circleMembers) {
+    const memberDoc = {
+      id: generateId(),
+      circleId: givingCircleId,
+      userId: String(member.user.external_id),
+      role: member.role,
+      createdAt: daysAgoIso(28),
+      updatedAt: nowIso()
+    };
+    await query(
+      `
+      INSERT INTO circle_members_rel (
+        external_id, circle_id, user_id, member_role, source_doc
+      ) VALUES ($1, $2, $3, $4, $5::jsonb)
+      ON CONFLICT (circle_id, user_id) DO NOTHING
+      `,
+      [memberDoc.id, givingCircleDbId, member.user.id, member.role, JSON.stringify(memberDoc)]
+    );
+  }
+
+  const contributionSeeds = [
+    { user: circleOwner, amount: 1200, note: 'Initial pool contribution' },
+    { user: secondDonor, amount: 800, note: 'Weekend match contribution' }
+  ].filter((entry) => entry.user);
+  for (const contribution of contributionSeeds) {
+    const contributionDoc = {
+      id: generateId(),
+      circleId: givingCircleId,
+      userId: String(contribution.user.external_id),
+      amount: contribution.amount,
+      note: contribution.note,
+      status: 'completed',
+      createdAt: daysAgoIso(25),
+      updatedAt: nowIso()
+    };
+    await query(
+      `
+      INSERT INTO circle_contributions_rel (
+        external_id, circle_id, user_id, amount, contribution_status, source_doc
+      ) VALUES ($1, $2, $3, $4, 'completed', $5::jsonb)
+      `,
+      [contributionDoc.id, givingCircleDbId, contribution.user.id, contribution.amount, JSON.stringify(contributionDoc)]
+    );
+  }
+
+  // -------------------------------------
+  // In-kind wishlist items and pledges
+  // -------------------------------------
+  const wishlistItemSeeds = [
+    {
+      itemName: 'School Notebooks',
+      quantityNeeded: 120,
+      quantityFulfilled: 35,
+      priority: 'high',
+      emergency: false,
+      description: 'Notebooks required for after-school education kits.',
+      unit: 'books'
+    },
+    {
+      itemName: 'Flood Relief Blankets',
+      quantityNeeded: 80,
+      quantityFulfilled: 20,
+      priority: 'critical',
+      emergency: true,
+      description: 'Blankets for emergency shelter support.',
+      unit: 'blankets'
+    }
+  ];
+
+  const wishlistRows = [];
+  for (let index = 0; index < wishlistItemSeeds.length; index += 1) {
+    const seed = wishlistItemSeeds[index];
+    const itemId = generateId();
+    const itemDoc = {
+      id: itemId,
+      ngoId: String(primaryNgo.id),
+      campaignId: String(primaryCampaign.id),
+      itemName: seed.itemName,
+      description: seed.description,
+      unit: seed.unit,
+      quantityNeeded: seed.quantityNeeded,
+      quantityFulfilled: seed.quantityFulfilled,
+      priority: seed.priority,
+      emergency: seed.emergency,
+      status: seed.quantityFulfilled >= seed.quantityNeeded ? 'fulfilled' : 'open',
+      createdAt: daysAgoIso(20 - index * 4),
+      updatedAt: nowIso()
+    };
+
+    const inserted = await query(
+      `
+      INSERT INTO wishlist_items_rel (
+        external_id, ngo_id, campaign_id, item_name, quantity_needed, quantity_fulfilled,
+        priority, emergency, status, source_doc
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
+      RETURNING id
+      `,
+      [
+        itemId,
+        primaryNgoRow.id,
+        primaryCampaignRow.id,
+        seed.itemName,
+        seed.quantityNeeded,
+        seed.quantityFulfilled,
+        seed.priority,
+        seed.emergency,
+        itemDoc.status,
+        JSON.stringify(itemDoc)
+      ]
+    );
+    wishlistRows.push({
+      dbId: inserted.rows[0].id,
+      id: itemId
+    });
+  }
+
+  if (wishlistRows[0] && circleOwner) {
+    const pledgeId = generateId();
+    const pledgeDoc = {
+      id: pledgeId,
+      wishlistItemId: wishlistRows[0].id,
+      userId: String(circleOwner.external_id),
+      quantityPledged: 20,
+      note: 'Books procured via CSR partner.',
+      status: 'received',
+      createdAt: daysAgoIso(12),
+      updatedAt: nowIso()
+    };
+    await query(
+      `
+      INSERT INTO in_kind_pledges_rel (
+        external_id, wishlist_item_id, user_id, quantity_pledged, status, source_doc
+      ) VALUES ($1, $2, $3, $4, 'received', $5::jsonb)
+      `,
+      [pledgeId, wishlistRows[0].dbId, circleOwner.id, 20, JSON.stringify(pledgeDoc)]
+    );
+  }
+
+  if (wishlistRows[1] && secondDonor) {
+    const pledgeId = generateId();
+    const pledgeDoc = {
+      id: pledgeId,
+      wishlistItemId: wishlistRows[1].id,
+      userId: String(secondDonor.external_id),
+      quantityPledged: 10,
+      note: 'Emergency delivery pending pickup.',
+      status: 'pledged',
+      createdAt: daysAgoIso(5),
+      updatedAt: nowIso()
+    };
+    await query(
+      `
+      INSERT INTO in_kind_pledges_rel (
+        external_id, wishlist_item_id, user_id, quantity_pledged, status, source_doc
+      ) VALUES ($1, $2, $3, $4, 'pledged', $5::jsonb)
+      `,
+      [pledgeId, wishlistRows[1].dbId, secondDonor.id, 10, JSON.stringify(pledgeDoc)]
+    );
+  }
+
+  // -------------------------------------
+  // Volunteer shifts + signups + logs
+  // -------------------------------------
+  const shiftId = generateId();
+  const shiftStartAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+  const shiftEndAt = new Date(Date.now() + (2 * 24 + 4) * 60 * 60 * 1000).toISOString();
+  const shiftDoc = {
+    id: shiftId,
+    ngoId: String(primaryNgo.id),
+    opportunityId: String(primaryOpportunity.id),
+    campaignId: String(primaryCampaign.id),
+    title: 'Weekend Meal Distribution Shift',
+    location: primaryCampaign.location || 'Bengaluru',
+    note: 'Assist in logistics and beneficiary queue support.',
+    startAt: shiftStartAt,
+    endAt: shiftEndAt,
+    slots: 12,
+    reminderBeforeHours: 18,
+    emergency: false,
+    status: 'scheduled',
+    createdAt: daysAgoIso(3),
+    updatedAt: nowIso()
+  };
+  const shiftInsert = await query(
+    `
+    INSERT INTO volunteer_shifts_rel (
+      external_id, ngo_id, opportunity_id, campaign_id, title, start_at, end_at, slots,
+      reminder_before_hours, emergency, status, source_doc
+    )
+    VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $8, $9, $10, 'scheduled', $11::jsonb)
+    RETURNING id
+    `,
+    [
+      shiftId,
+      primaryNgoRow.id,
+      primaryOpportunityRow.id,
+      primaryCampaignRow.id,
+      shiftDoc.title,
+      shiftStartAt,
+      shiftEndAt,
+      shiftDoc.slots,
+      shiftDoc.reminderBeforeHours,
+      false,
+      JSON.stringify(shiftDoc)
+    ]
+  );
+  const shiftDbId = shiftInsert.rows[0].id;
+
+  const shiftSignupSeeds = [circleOwner, secondDonor].filter(Boolean);
+  const signupRows = [];
+  for (let index = 0; index < shiftSignupSeeds.length; index += 1) {
+    const signupUser = shiftSignupSeeds[index];
+    const signupId = generateId();
+    const signupDoc = {
+      id: signupId,
+      shiftId,
+      userId: String(signupUser.external_id),
+      status: 'signed_up',
+      reminderSentAt: index === 0 ? daysAgoIso(1) : null,
+      createdAt: daysAgoIso(2),
+      updatedAt: nowIso()
+    };
+    const inserted = await query(
+      `
+      INSERT INTO volunteer_shift_signups_rel (
+        external_id, shift_id, user_id, status, reminder_sent_at, source_doc
+      ) VALUES ($1, $2, $3, 'signed_up', $4::timestamptz, $5::jsonb)
+      RETURNING id
+      `,
+      [signupId, shiftDbId, signupUser.id, signupDoc.reminderSentAt, JSON.stringify(signupDoc)]
+    );
+    signupRows.push({
+      dbId: inserted.rows[0].id,
+      id: signupId,
+      user: signupUser
+    });
+  }
+
+  if (signupRows[0]) {
+    const logId = generateId();
+    const logDoc = {
+      id: logId,
+      signupId: signupRows[0].id,
+      shiftId,
+      userId: String(signupRows[0].user.external_id),
+      ngoId: String(primaryNgo.id),
+      hours: 5,
+      summary: 'Managed distribution queue and field coordination.',
+      approvalStatus: 'approved',
+      reviewedAt: daysAgoIso(1),
+      createdAt: daysAgoIso(1),
+      updatedAt: nowIso()
+    };
+    await query(
+      `
+      INSERT INTO volunteer_logs_rel (
+        external_id, shift_signup_id, shift_id, user_id, ngo_id, hours, approval_status,
+        approved_by_ngo_id, approved_at, source_doc
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, 'approved', $7, $8::timestamptz, $9::jsonb)
+      `,
+      [logId, signupRows[0].dbId, shiftDbId, signupRows[0].user.id, primaryNgoRow.id, 5, primaryNgoRow.id, logDoc.reviewedAt, JSON.stringify(logDoc)]
+    );
+  }
+
+  if (signupRows[1]) {
+    const logId = generateId();
+    const logDoc = {
+      id: logId,
+      signupId: signupRows[1].id,
+      shiftId,
+      userId: String(signupRows[1].user.external_id),
+      ngoId: String(primaryNgo.id),
+      hours: 3,
+      summary: 'Volunteer logistics assistance (pending review).',
+      approvalStatus: 'pending',
+      createdAt: nowIso(),
+      updatedAt: nowIso()
+    };
+    await query(
+      `
+      INSERT INTO volunteer_logs_rel (
+        external_id, shift_signup_id, shift_id, user_id, ngo_id, hours, approval_status, source_doc
+      ) VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7::jsonb)
+      `,
+      [logId, signupRows[1].dbId, shiftDbId, signupRows[1].user.id, primaryNgoRow.id, 3, JSON.stringify(logDoc)]
+    );
+  }
+
+  // -------------------------------------
+  // Donor CRM notes + segment seeds
+  // -------------------------------------
+  const segmentId = generateId();
+  const segmentDoc = {
+    id: segmentId,
+    ngoId: String(primaryNgo.id),
+    segmentName: 'Education Champions',
+    segmentDescription: 'Repeat donors aligned with education and child nutrition programs.',
+    createdAt: daysAgoIso(14),
+    updatedAt: nowIso()
+  };
+  const segmentInsert = await query(
+    `
+    INSERT INTO donor_segments_rel (
+      external_id, ngo_id, segment_name, segment_description, source_doc
+    ) VALUES ($1, $2, $3, $4, $5::jsonb)
+    RETURNING id
+    `,
+    [segmentId, primaryNgoRow.id, segmentDoc.segmentName, segmentDoc.segmentDescription, JSON.stringify(segmentDoc)]
+  );
+  const segmentDbId = segmentInsert.rows[0].id;
+
+  for (const donor of donorUsers.slice(0, 3)) {
+    const donorRow = userByExternalId.get(String(donor.id));
+    if (!donorRow) continue;
+    const memberDoc = {
+      id: generateId(),
+      segmentId,
+      donorUserId: String(donor.id),
+      createdAt: daysAgoIso(10),
+      updatedAt: nowIso()
+    };
+    await query(
+      `
+      INSERT INTO donor_segment_members_rel (
+        external_id, segment_id, donor_user_id, source_doc
+      )
+      VALUES ($1, $2, $3, $4::jsonb)
+      ON CONFLICT (segment_id, donor_user_id) DO NOTHING
+      `,
+      [memberDoc.id, segmentDbId, donorRow.id, JSON.stringify(memberDoc)]
+    );
+  }
+
+  for (const donor of donorUsers.slice(0, 2)) {
+    const donorRow = userByExternalId.get(String(donor.id));
+    if (!donorRow) continue;
+    const noteDoc = {
+      id: generateId(),
+      ngoId: String(primaryNgo.id),
+      donorUserId: String(donor.id),
+      noteText: `Seed note: ${donor.name} prefers quarterly impact summaries.`,
+      createdByNgoId: String(primaryNgo.id),
+      createdAt: daysAgoIso(9),
+      updatedAt: nowIso()
+    };
+    await query(
+      `
+      INSERT INTO donor_notes_rel (
+        external_id, ngo_id, donor_user_id, note_text, created_by_ngo_id, source_doc
+      )
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+      `,
+      [noteDoc.id, primaryNgoRow.id, donorRow.id, noteDoc.noteText, primaryNgoRow.id, JSON.stringify(noteDoc)]
+    );
+  }
+
+  // -------------------------------------
+  // Impact updates for transparency timeline
+  // -------------------------------------
+  const firstDonation = donationRows[0];
+  const impactSeeds = [
+    {
+      title: 'Nutrition Kits Distributed',
+      details: 'Completed distribution of additional nutrition kits to partner schools in Bengaluru.',
+      amountUtilized: 38000,
+      beneficiariesReached: 420,
+      daysAgo: 18
+    },
+    {
+      title: 'Volunteer-led Outreach Week',
+      details: 'Volunteer team completed community awareness sessions and onboarding for caregivers.',
+      amountUtilized: 21500,
+      beneficiariesReached: 260,
+      daysAgo: 6
+    }
+  ];
+
+  for (const seed of impactSeeds) {
+    const impactId = generateId();
+    const createdAt = daysAgoIso(seed.daysAgo);
+    const impactDoc = {
+      id: impactId,
+      ngoId: String(primaryNgo.id),
+      campaignId: String(primaryCampaign.id),
+      donationId: firstDonation?.id || null,
+      title: seed.title,
+      details: seed.details,
+      amountUtilized: seed.amountUtilized,
+      beneficiariesReached: seed.beneficiariesReached,
+      evidence: ['https://example.org/evidence/photo-1', 'https://example.org/evidence/report-1'],
+      createdAt,
+      updatedAt: nowIso()
+    };
+    await query(
+      `
+      INSERT INTO impact_updates_rel (
+        external_id, ngo_id, campaign_id, donation_id, title, details, amount_utilized, beneficiaries_reached,
+        created_at, updated_at, source_doc
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamptz, $9::timestamptz, $10::jsonb)
+      `,
+      [
+        impactId,
+        primaryNgoRow.id,
+        primaryCampaignRow.id,
+        firstDonation?.dbId || null,
+        seed.title,
+        seed.details,
+        seed.amountUtilized,
+        seed.beneficiariesReached,
+        createdAt,
+        JSON.stringify(impactDoc)
+      ]
+    );
+  }
+
+  // -------------------------------------
+  // Corporate matching profile + approved match
+  // -------------------------------------
+  const corporateOwnerRow = userByExternalId.get(String(corporateOwner.id));
+  const rahulRow = userByExternalId.get(String(rahulUser.id));
+  if (corporateOwnerRow && rahulRow && firstDonation) {
+    const profileId = generateId();
+    const profileDoc = {
+      id: profileId,
+      ownerUserId: String(corporateOwner.id),
+      companyName: 'Civic Tech Labs Pvt Ltd',
+      matchRatio: 1.5,
+      capPerEmployee: 15000,
+      policyNote: 'Employees can request matching for verified campaigns up to policy cap.',
+      active: true,
+      createdAt: daysAgoIso(25),
+      updatedAt: nowIso()
+    };
+    const profileInsert = await query(
+      `
+      INSERT INTO corporate_profiles_rel (
+        external_id, owner_user_id, company_name, match_ratio, cap_per_employee, active, source_doc
+      )
+      VALUES ($1, $2, $3, $4, $5, true, $6::jsonb)
+      RETURNING id
+      `,
+      [profileId, corporateOwnerRow.id, profileDoc.companyName, profileDoc.matchRatio, profileDoc.capPerEmployee, JSON.stringify(profileDoc)]
+    );
+    const profileDbId = profileInsert.rows[0].id;
+
+    const employeeLinkId = generateId();
+    const employeeLinkDoc = {
+      id: employeeLinkId,
+      corporateProfileId: profileId,
+      userId: String(rahulUser.id),
+      employeeCode: 'CTL-EMP-102',
+      status: 'approved',
+      approvedAt: daysAgoIso(23),
+      createdAt: daysAgoIso(24),
+      updatedAt: nowIso()
+    };
+    await query(
+      `
+      INSERT INTO corporate_employee_links_rel (
+        external_id, corporate_profile_id, user_id, employee_code, status, approved_by_user_id, approved_at, source_doc
+      )
+      VALUES ($1, $2, $3, $4, 'approved', $5, $6::timestamptz, $7::jsonb)
+      `,
+      [employeeLinkId, profileDbId, rahulRow.id, employeeLinkDoc.employeeCode, corporateOwnerRow.id, employeeLinkDoc.approvedAt, JSON.stringify(employeeLinkDoc)]
+    );
+
+    const matchId = generateId();
+    const matchedAmount = Math.round(Math.min(firstDonation.amount * profileDoc.matchRatio, profileDoc.capPerEmployee));
+    const matchDoc = {
+      id: matchId,
+      corporateProfileId: profileId,
+      donationId: firstDonation.id,
+      employeeUserId: String(rahulUser.id),
+      matchedAmount,
+      status: 'approved',
+      approvedAt: daysAgoIso(20),
+      createdAt: daysAgoIso(21),
+      updatedAt: nowIso()
+    };
+    await query(
+      `
+      INSERT INTO corporate_matches_rel (
+        external_id, corporate_profile_id, donation_id, employee_user_id, matched_amount, status,
+        approved_by_user_id, approved_at, source_doc
+      )
+      VALUES ($1, $2, $3, $4, $5, 'approved', $6, $7::timestamptz, $8::jsonb)
+      `,
+      [matchId, profileDbId, firstDonation.dbId, rahulRow.id, matchedAmount, corporateOwnerRow.id, matchDoc.approvedAt, JSON.stringify(matchDoc)]
+    );
+  }
+
+  // -------------------------------------
+  // Volunteer completion + endorsement seed
+  // -------------------------------------
+  if (rahulRow) {
+    const volunteerAppId = generateId();
+    const volunteerAppDoc = {
+      id: volunteerAppId,
+      user: String(rahulUser.id),
+      ngo: String(primaryNgo.id),
+      opportunity: String(primaryOpportunity.id),
+      fullName: rahulUser.name,
+      email: rahulUser.email,
+      phone: rahulUser.mobileNumber || '9999999999',
+      preferredActivities: ['Community Outreach', 'Event Coordination'],
+      availability: 'Weekends',
+      motivation: 'Seed volunteer activity for feature validation.',
+      assignedTask: 'Community Outreach',
+      status: 'completed',
+      activityHours: 6,
+      certificateApprovalStatus: 'approved',
+      certificateApprovalRequestedAt: daysAgoIso(8),
+      certificateApprovalReviewedAt: daysAgoIso(7),
+      certificateApprovedBy: String(primaryNgo.id),
+      completedAt: daysAgoIso(8),
+      createdAt: daysAgoIso(12),
+      updatedAt: nowIso()
+    };
+    const volunteerInsert = await query(
+      `
+      INSERT INTO volunteer_applications_rel (
+        external_id, user_id, ngo_id, opportunity_id, full_name, email, phone, preferred_activities, availability,
+        motivation, assigned_task, status, certificate_approval_status, certificate_approval_requested_at,
+        certificate_approval_reviewed_at, certificate_approved_by_ngo_id, activity_hours, applied_at, completed_at,
+        created_at, updated_at, source_doc
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8::text[], $9, $10, $11, 'completed', 'approved',
+        $12::timestamptz, $13::timestamptz, $14, $15, $16::timestamptz, $17::timestamptz,
+        $18::timestamptz, $18::timestamptz, $19::jsonb
+      )
+      RETURNING id
+      `,
+      [
+        volunteerAppId,
+        rahulRow.id,
+        primaryNgoRow.id,
+        primaryOpportunityRow.id,
+        volunteerAppDoc.fullName,
+        volunteerAppDoc.email,
+        volunteerAppDoc.phone,
+        volunteerAppDoc.preferredActivities,
+        volunteerAppDoc.availability,
+        volunteerAppDoc.motivation,
+        volunteerAppDoc.assignedTask,
+        volunteerAppDoc.certificateApprovalRequestedAt,
+        volunteerAppDoc.certificateApprovalReviewedAt,
+        primaryNgoRow.id,
+        volunteerAppDoc.activityHours,
+        daysAgoIso(12),
+        volunteerAppDoc.completedAt,
+        daysAgoIso(12),
+        JSON.stringify(volunteerAppDoc)
+      ]
+    );
+
+    const volunteerAppDbId = volunteerInsert.rows[0]?.id || null;
+    if (volunteerAppDbId) {
+      const endorsementId = generateId();
+      const endorsementDoc = {
+        id: endorsementId,
+        ngoId: String(primaryNgo.id),
+        userId: String(rahulUser.id),
+        applicationId: volunteerAppId,
+        skills: ['Community Outreach', 'Logistics Coordination'],
+        note: 'Consistently reliable during weekend service shifts.',
+        createdAt: daysAgoIso(6),
+        updatedAt: nowIso()
+      };
+      await query(
+        `
+        INSERT INTO volunteer_endorsements_rel (
+          external_id, ngo_id, user_id, application_id, source_doc
+        )
+        VALUES ($1, $2, $3, $4, $5::jsonb)
+        `,
+        [endorsementId, primaryNgoRow.id, rahulRow.id, volunteerAppDbId, JSON.stringify(endorsementDoc)]
+      );
+    }
+  }
+
+  // -------------------------------------
+  // Mark emergency campaign/opportunity
+  // -------------------------------------
+  if (secondaryCampaignRow) {
+    const doc = secondaryCampaignRow.source_doc && typeof secondaryCampaignRow.source_doc === 'object'
+      ? { ...secondaryCampaignRow.source_doc }
+      : {};
+    doc.emergency = true;
+    doc.emergencyNote = 'Monsoon response support is currently active.';
+    doc.emergencyUpdatedAt = nowIso();
+    doc.updatedAt = nowIso();
+    await query(
+      `
+      UPDATE campaigns_rel
+      SET source_doc = $2::jsonb,
+          updated_at = NOW()
+      WHERE id = $1
+      `,
+      [secondaryCampaignRow.id, JSON.stringify(doc)]
+    );
+  }
+
+  if (primaryOpportunityRow) {
+    const doc = primaryOpportunityRow.source_doc && typeof primaryOpportunityRow.source_doc === 'object'
+      ? { ...primaryOpportunityRow.source_doc }
+      : {};
+    doc.emergency = true;
+    doc.emergencyNote = 'Additional volunteer support needed for emergency coordination.';
+    doc.emergencyUpdatedAt = nowIso();
+    doc.updatedAt = nowIso();
+    await query(
+      `
+      UPDATE volunteer_opportunities_rel
+      SET source_doc = $2::jsonb,
+          updated_at = NOW()
+      WHERE id = $1
+      `,
+      [primaryOpportunityRow.id, JSON.stringify(doc)]
+    );
+  }
+
+  // -------------------------------------
+  // Seed gamification points and badges
+  // -------------------------------------
+  for (const donation of donationRows.slice(0, 4)) {
+    await awardPoints(donation.donorUserId, {
+      points: Math.max(10, Math.round(Number(donation.amount || 0) / 220)),
+      eventType: 'seed_donation_reward',
+      badgeKey: '',
+      reason: 'Seed reward for completed donation history.',
+      referenceType: 'seed_donation',
+      referenceId: donation.id
+    });
+  }
+
+  await awardPoints(String(rahulUser.id), {
+    points: 22,
+    eventType: 'seed_volunteer_reward',
+    badgeKey: 'community_helper',
+    reason: 'Seed reward for volunteer completion.',
+    referenceType: 'seed_volunteer',
+    referenceId: `seed_volunteer_${String(primaryOpportunity.id)}`
+  });
+
+  console.log(`✅ Innovation seed data prepared: ${donationRows.length} donations, ${wishlistRows.length} wishlist items, 1 giving circle, 1 corporate profile`);
+};
+
 const seedDatabase = async () => {
   try {
     await connectDB(process.env.POSTGRES_URL || process.env.DATABASE_URL);
 
-    await Promise.all([
-      User.deleteMany({}),
-      NGO.deleteMany({}),
-      Campaign.deleteMany({}),
-      VolunteerOpportunity.deleteMany({}),
-      Category.deleteMany({})
-    ]);
+    const tableResult = await query(`
+      SELECT tablename
+      FROM pg_tables
+      WHERE schemaname = 'public'
+        AND tablename LIKE '%\\_rel' ESCAPE '\\'
+      ORDER BY tablename
+    `);
+
+    const relationalTables = tableResult.rows
+      .map((row) => row.tablename)
+      .filter(Boolean);
+
+    if (relationalTables.length > 0) {
+      const quotedTables = relationalTables.map((tableName) => `"${tableName}"`).join(', ');
+      await query(`TRUNCATE TABLE ${quotedTables} RESTART IDENTITY CASCADE`);
+    }
 
     console.log('🧹 Cleared existing data');
 
@@ -2006,7 +3188,7 @@ const seedDatabase = async () => {
     await Category.insertMany(categoryNames.map((name) => ({ name })));
     console.log(`✅ Created ${categoryNames.length} categories`);
 
-    const ngoPayload = ngoSeeds.map((seed) => ({
+    const ngoPayload = ngoSeedsWithTeamData.map((seed) => ({
       ...seed,
       password: hashedPassword,
       role: 'ngo',
@@ -2020,7 +3202,7 @@ const seedDatabase = async () => {
 
     const ngoBySlug = Object.fromEntries(
       createdNgos.map((ngo) => {
-        const match = ngoSeeds.find((seed) => seed.email === ngo.email);
+        const match = ngoSeedsWithTeamData.find((seed) => seed.email === ngo.email);
         return [match?.slug, ngo];
       })
     );
@@ -2060,6 +3242,7 @@ const seedDatabase = async () => {
 
     const createdCampaigns = await Campaign.insertMany(campaignPayload);
     console.log(`✅ Created ${createdCampaigns.length} detailed campaigns`);
+    await assignMockMembersToCampaignsAndBadges({ createdNgos, createdCampaigns });
 
     const commitments = ['One-time', 'Weekly', 'Monthly', 'Flexible'];
     const volunteerOpportunities = createdCampaigns
@@ -2097,12 +3280,20 @@ const seedDatabase = async () => {
     });
 
     console.log('✅ Created admin user: admin@ngoconnect.org');
+
+    await addInnovationSeedData({
+      createdUsers,
+      createdNgos,
+      createdCampaigns,
+      createdOpportunities
+    });
+
     console.log('\n🎉 Database seeded successfully with Bangalore/Karnataka datasets!\n');
     console.log('📝 Test Credentials:');
     console.log('─────────────────────────────────────────');
     console.log('Admin: admin@ngoconnect.org / password123');
     console.log('User: rahul@example.com / password123');
-    console.log(`NGO: ${ngoSeeds[0].email} / password123`);
+    console.log(`NGO: ${ngoSeedsWithTeamData[0].email} / password123`);
     console.log('─────────────────────────────────────────\n');
 
     process.exit(0);

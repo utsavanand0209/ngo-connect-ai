@@ -14,7 +14,9 @@ const notificationsRoutes = require('./routes/notifications');
 const categoriesRoutes = require('./routes/categories');
 const requestsRoutes = require('./routes/requests');
 const certificatesRoutes = require('./routes/certificates');
+const innovationRoutes = require('./routes/innovation');
 const { connectDB } = require('./db/postgres');
+const { startWebhookAutoRetryWorker } = require('./utils/webhookAutoRetryWorker');
 
 const app = express();
 app.use(cors({
@@ -38,12 +40,26 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/requests', requestsRoutes);
 app.use('/api/certificates', certificatesRoutes);
+app.use('/api/innovation', innovationRoutes);
 
 app.get('/', (req, res) => res.send({ ok: true, message: 'NGO Connect API running' }));
 
 const startServer = async () => {
   await connectDB(process.env.POSTGRES_URL || process.env.DATABASE_URL);
-  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  const stopWebhookWorker = startWebhookAutoRetryWorker();
+
+  const shutdown = () => {
+    try {
+      stopWebhookWorker();
+    } catch (err) {
+      // best effort shutdown
+    }
+    server.close(() => process.exit(0));
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 };
 
 startServer();

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getUserRole, getValidToken } from '../utils/auth';
 
 const normalizeBase = (value) => value.replace(/\/+$/, '');
 const envApiUrl = process.env.REACT_APP_API_URL;
@@ -7,20 +8,18 @@ const API_URL = normalizeBase(envApiUrl || LOCAL_API_URL);
 
 const api = axios.create({ baseURL: API_URL });
 
-const getRoleFromToken = () => {
-  const token = localStorage.getItem('token');
-  if (!token) return null;
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.role || null;
-  } catch (err) {
-    return null;
-  }
-};
+const getRoleFromToken = () => getUserRole();
 
 api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  const token = getValidToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  } else {
+    if (config.headers && config.headers.Authorization) {
+      delete config.headers.Authorization;
+    }
+    window.dispatchEvent(new Event('authChange'));
+  }
   return config;
 });
 
@@ -101,9 +100,12 @@ export const reviewVolunteerCertificateRequest = (applicationId, data) =>
 
 // Campaign volunteer registrations (campaign volunteer feature)
 export const getNgoCampaignVolunteers = (params = {}) => api.get('/campaigns/ngo/volunteers', { params });
+export const getNgoCampaignUpdateAnalytics = () => api.get('/campaigns/ngo/campaign-updates/analytics');
 export const getMyCampaignVolunteerRegistrations = () => api.get('/campaigns/my/volunteer-registrations');
 export const reviewCampaignVolunteerRegistration = (campaignId, data) =>
   api.post(`/campaigns/${campaignId}/volunteer/decision`, data);
+export const postCampaignUpdate = (campaignId, data) => api.post(`/campaigns/${campaignId}/updates`, data);
+export const getCampaignUpdateAnalytics = (campaignId) => api.get(`/campaigns/${campaignId}/updates/analytics`);
 
 // Messages
 export const getMessageConversations = () => api.get('/messages/conversations');
@@ -112,9 +114,20 @@ export const markMessageThreadRead = (counterpartId) => api.post(`/messages/thre
 export const sendMessageToNgo = (ngoId, body) => api.post(`/messages/to-ngo/${ngoId}`, { body });
 export const sendMessageToAllNgos = (body) => api.post('/messages/to-all-ngos', { body });
 export const sendMessageToUser = (userId, body) => api.post(`/messages/to-user/${userId}`, { body });
+export const trackNotificationEngagement = (notificationId, data = {}) =>
+  api.post(`/notifications/${notificationId}/open`, data);
 
 // Admin dashboard
 export const getAdminDashboard = (params = {}) => api.get('/admin/dashboard', { params });
+export const getAdminWebhookDeliveries = (params = {}) => api.get('/admin/webhooks', { params });
+export const getAdminWebhookMetrics = (params = {}) => api.get('/admin/webhooks/metrics', { params });
+export const exportAdminWebhooks = (params = {}) =>
+  api.get('/admin/webhooks/export', { params, responseType: params.format === 'json' ? 'json' : 'blob' });
+export const retryAdminWebhookDelivery = (deliveryId, data = {}) =>
+  api.post(`/admin/webhooks/${deliveryId}/retry`, data);
+export const getAdminWebhookWorkerStatus = () => api.get('/admin/webhooks/worker/status');
+export const runAdminWebhookWorkerTick = () => api.post('/admin/webhooks/worker/run');
+export const runAdminWebhookCleanup = (data = {}) => api.post('/admin/webhooks/cleanup', data);
 
 // User preferences for AI recommendations
 export const getUserPreferences = () => api.get('/users/preferences');
@@ -122,6 +135,8 @@ export const updateUserPreferences = (data) => api.put('/users/preferences', dat
 
 // AI Recommendations
 export const getAIRecommendations = () => api.get('/ai/recommendations');
+export const generateProposalDraft = (data) => api.post('/ai/proposal-draft', data);
+export const forecastCampaignSuccess = (data) => api.post('/ai/campaign-forecast', data);
 
 // Categories
 export const getAvailableCategories = () => api.get('/categories');
@@ -139,5 +154,68 @@ export const getAllHelpRequests = () => api.get('/admin/requests');
 
 // NGOs
 export const getNgos = (params = {}) => api.get('/ngos', { params });
+export const getNgoProfile = () => api.get('/ngos/me');
+export const updateNgoProfile = (data) => api.put('/ngos/me', data);
+export const getNgoMembers = () => api.get('/ngos/me/members');
+export const addNgoMember = (data) => api.post('/ngos/me/members', data);
+export const getNgoTransparencyScore = (ngoId) => api.get(`/ngos/${ngoId}/transparency`);
+
+// Innovation APIs
+export const listGivingCircles = (params = {}) => api.get('/innovation/giving-circles', { params });
+export const getGivingCircleDetails = (circleId) => api.get(`/innovation/giving-circles/${circleId}`);
+export const createGivingCircle = (data) => api.post('/innovation/giving-circles', data);
+export const joinGivingCircle = (circleId) => api.post(`/innovation/giving-circles/${circleId}/join`, {});
+export const contributeGivingCircle = (circleId, data) => api.post(`/innovation/giving-circles/${circleId}/contribute`, data);
+
+export const listWishlistItems = (params = {}) => api.get('/innovation/wishlists/items', { params });
+export const createWishlistItem = (data) => api.post('/innovation/wishlists/items', data);
+export const getNgoWishlistItems = () => api.get('/innovation/wishlists/ngo');
+export const pledgeWishlistItem = (itemId, data) => api.post(`/innovation/wishlists/items/${itemId}/pledge`, data);
+export const updateWishlistPledgeStatus = (pledgeId, data) => api.post(`/innovation/wishlists/pledges/${pledgeId}/status`, data);
+
+export const createVolunteerShift = (data) => api.post('/innovation/volunteer/shifts', data);
+export const listVolunteerShifts = (params = {}) => api.get('/innovation/volunteer/shifts', { params });
+export const listMyVolunteerShiftSignups = () => api.get('/innovation/volunteer/shifts/my');
+export const signupVolunteerShift = (shiftId) => api.post(`/innovation/volunteer/shifts/${shiftId}/signup`, {});
+export const sendVolunteerShiftReminders = (data = {}) => api.post('/innovation/volunteer/shifts/reminders/run', data);
+export const createVolunteerLog = (signupId, data) => api.post(`/innovation/volunteer/logs/${signupId}`, data);
+export const getNgoVolunteerLogs = (params = {}) => api.get('/innovation/volunteer/logs/ngo', { params });
+export const approveVolunteerLog = (logId, data) => api.post(`/innovation/volunteer/logs/${logId}/approve`, data);
+export const exportNgoVolunteerLogs = () =>
+  api.get('/innovation/volunteer/logs/ngo/export', { responseType: 'blob' });
+
+export const getCrmDonors = (params = {}) => api.get('/innovation/crm/donors', { params });
+export const createCrmDonorNote = (donorUserId, data) => api.post(`/innovation/crm/donors/${donorUserId}/notes`, data);
+export const getCrmDonorNotes = (donorUserId) => api.get(`/innovation/crm/donors/${donorUserId}/notes`);
+export const createCrmSegment = (data) => api.post('/innovation/crm/segments', data);
+export const listCrmSegments = () => api.get('/innovation/crm/segments');
+export const addCrmSegmentMembers = (segmentId, data) => api.post(`/innovation/crm/segments/${segmentId}/members`, data);
+export const sendCrmSegmentMessage = (segmentId, data) => api.post(`/innovation/crm/segments/${segmentId}/campaign-message`, data);
+
+export const createImpactUpdate = (data) => api.post('/innovation/impact-updates', data);
+export const getImpactUpdatesForCampaign = (campaignId, params = {}) =>
+  api.get(`/innovation/impact-updates/campaign/${campaignId}`, { params });
+export const getNgoImpactUpdates = (params = {}) => api.get('/innovation/impact-updates/ngo', { params });
+
+export const createCorporateProfile = (data) => api.post('/innovation/corporate/profiles', data);
+export const getMyCorporateProfiles = () => api.get('/innovation/corporate/profiles/my');
+export const linkCorporateProfile = (profileId, data) => api.post(`/innovation/corporate/profiles/${profileId}/link`, data);
+export const listCorporateEmployees = (profileId) => api.get(`/innovation/corporate/profiles/${profileId}/employees`);
+export const approveCorporateEmployeeLink = (profileId, linkId) =>
+  api.post(`/innovation/corporate/profiles/${profileId}/employees/${linkId}/approve`, {});
+export const evaluateCorporateMatch = (data) => api.post('/innovation/corporate/matches/evaluate', data);
+export const approveCorporateMatch = (matchId) => api.post(`/innovation/corporate/matches/${matchId}/approve`, {});
+export const getMyCorporateMatches = () => api.get('/innovation/corporate/matches/my');
+
+export const toggleEmergencyCampaign = (campaignId, data) => api.post(`/innovation/emergency/campaigns/${campaignId}`, data);
+export const toggleEmergencyOpportunity = (opportunityId, data) =>
+  api.post(`/innovation/emergency/opportunities/${opportunityId}`, data);
+export const getEmergencyFeed = () => api.get('/innovation/emergency/feed');
+
+export const createVolunteerEndorsement = (data) => api.post('/innovation/endorsements', data);
+export const getMyVolunteerEndorsements = () => api.get('/innovation/endorsements/my');
+
+export const getGamificationSummary = () => api.get('/innovation/gamification/me');
+export const getGamificationLeaderboard = (params = {}) => api.get('/innovation/gamification/leaderboard', { params });
 
 export default api;

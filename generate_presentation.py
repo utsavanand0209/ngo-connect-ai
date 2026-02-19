@@ -858,7 +858,7 @@ add_text_box(sl, Inches(1), Inches(5.0), Inches(11), Inches(1),
 # ═══════════════════════════════════════════════════════════════
 # SAVE
 # ═══════════════════════════════════════════════════════════════
-output_path = "/Users/ppushkar/Development/experiment/ngo-connect-ai/NGO_Connect_Architecture_Presentation.pptx"
+output_path = "./NGO_Connect_Architecture_Presentation.pptx"
 prs.save(output_path)
 print(f"✅ Presentation saved to: {output_path}")
 print(f"   Slides: {len(prs.slides)}")

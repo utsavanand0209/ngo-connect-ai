@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { getTokenPayload, hasValidSession } from '../utils/auth';
 import {
   getVolunteerOpportunities,
   getMyVolunteerApplications,
@@ -40,6 +41,8 @@ export default function VolunteerOpportunities() {
   const [searchTerm, setSearchTerm] = useState('');
   const [location, setLocation] = useState('');
   const [commitment, setCommitment] = useState('');
+  const [microOnly, setMicroOnly] = useState(false);
+  const [maxHours, setMaxHours] = useState('');
   const [applicationForms, setApplicationForms] = useState({});
   const [applicationMap, setApplicationMap] = useState({});
   const [actionLoading, setActionLoading] = useState({});
@@ -48,20 +51,13 @@ export default function VolunteerOpportunities() {
   const [hoursByOpportunity, setHoursByOpportunity] = useState({});
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setUser(payload);
-      } catch (err) {
-        setUser(null);
-      }
-    }
+    const payload = getTokenPayload();
+    setUser(payload || null);
     fetchOpportunities();
   }, []);
 
   const fetchApplications = async () => {
-    if (!localStorage.getItem('token')) {
+    if (!hasValidSession()) {
       setApplicationMap({});
       return;
     }
@@ -194,9 +190,15 @@ export default function VolunteerOpportunities() {
 
   const filteredOpportunities = opportunities.filter((op) => {
     const text = `${op.title || ''} ${op.description || ''}`.toLowerCase();
+    const hours = Number(op.timeCommitmentHours);
+    const hasValidHours = Number.isFinite(hours) && hours > 0;
+    const maxAllowedHours = Number(maxHours);
+    const enforceMaxHours = Number.isFinite(maxAllowedHours) && maxAllowedHours > 0;
     return text.includes(searchTerm.toLowerCase()) &&
       (location === '' || (op.location && op.location.toLowerCase().includes(location.toLowerCase()))) &&
-      (commitment === '' || op.commitment === commitment);
+      (commitment === '' || op.commitment === commitment) &&
+      (!microOnly || op.isMicroVolunteer === true || (hasValidHours && hours <= 4)) &&
+      (!enforceMaxHours || !hasValidHours || hours <= maxAllowedHours);
   });
 
   return (
@@ -215,7 +217,7 @@ export default function VolunteerOpportunities() {
           </div>
         )}
 
-        <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="mb-8 grid grid-cols-1 md:grid-cols-5 gap-6">
           <input
             type="text"
             placeholder="Search opportunities..."
@@ -241,6 +243,23 @@ export default function VolunteerOpportunities() {
             <option value="Monthly">Monthly</option>
             <option value="Flexible">Flexible</option>
           </select>
+          <input
+            type="number"
+            min="1"
+            step="0.5"
+            placeholder="Max hours"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm"
+            value={maxHours}
+            onChange={(e) => setMaxHours(e.target.value)}
+          />
+          <label className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={microOnly}
+              onChange={(e) => setMicroOnly(e.target.checked)}
+            />
+            Micro only
+          </label>
         </div>
 
         {loading ? (
@@ -263,6 +282,12 @@ export default function VolunteerOpportunities() {
               const approvalStatus = application?.certificateApprovalStatus || 'not_requested';
               const approvalClass = approvalStyles[approvalStatus] || approvalStyles.not_requested;
               const spotsLeft = Math.max((op.spots || 0) - (op.applicants?.length || 0), 0);
+              const requiredSkills = Array.isArray(op.skillsRequired) && op.skillsRequired.length
+                ? op.skillsRequired
+                : (op.skills || []);
+              const timeCommitmentLabel = op.timeCommitmentHours
+                ? `${Number(op.timeCommitmentHours).toLocaleString('en-IN')} hrs`
+                : op.commitment;
 
               return (
                 <div key={op.id} className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
@@ -282,16 +307,21 @@ export default function VolunteerOpportunities() {
                         <p className="text-gray-600 mb-4">{(op.description || '').slice(0, 220)}...</p>
 
                         <div className="flex flex-wrap gap-2 mb-4">
-                          {(op.skills || []).map((skill, index) => (
+                          {requiredSkills.map((skill, index) => (
                             <span key={`${skill}-${index}`} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
                               {skill}
                             </span>
                           ))}
+                          {op.isMicroVolunteer && (
+                            <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded">
+                              Micro-volunteering
+                            </span>
+                          )}
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 text-sm text-gray-600 mb-4">
                           <span>{op.location || 'Remote'}</span>
-                          <span>{op.commitment}</span>
+                          <span>{timeCommitmentLabel || 'Flexible'}</span>
                           <span>{spotsLeft} spots left</span>
                           <span>{new Date(op.createdAt).toLocaleDateString()}</span>
                         </div>

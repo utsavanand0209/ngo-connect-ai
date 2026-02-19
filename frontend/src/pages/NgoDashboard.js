@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api, {
   getNgoCampaignVolunteers,
+  getNgoCampaignUpdateAnalytics,
   getMessageConversations,
   getNgoDonationApprovalQueue,
   getNgoDonationTransactions,
@@ -20,6 +21,51 @@ const when = (value) => {
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return 'N/A';
   return dt.toLocaleString();
+};
+
+const toPercent = (value) => `${Number(value || 0).toFixed(1)}%`;
+
+const buildEmptyCampaignUpdateAnalytics = () => ({
+  generatedAt: null,
+  totals: {
+    updatesCount: 0,
+    targetDonors: 0,
+    sentCount: 0,
+    openedCount: 0,
+    clickedCount: 0,
+    emailAttemptedCount: 0,
+    emailSentCount: 0,
+    emailFailedCount: 0,
+    openRate: 0,
+    clickRate: 0,
+    emailDeliveryRate: 0
+  },
+  campaigns: []
+});
+
+const normalizeSupportRequestStatus = (value) => {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ');
+
+  if (!normalized) return 'pending';
+  if (normalized === 'inprogress' || normalized.includes('progress')) return 'in progress';
+  if (normalized.startsWith('approve')) return 'approved';
+  if (normalized.startsWith('complete')) return 'completed';
+  if (normalized.startsWith('reject')) return 'rejected';
+  if (normalized.startsWith('pend')) return 'pending';
+  return normalized;
+};
+
+const toSupportRequestStatusLabel = (status) => {
+  const key = normalizeSupportRequestStatus(status);
+  if (key === 'in progress') return 'In Progress';
+  if (key === 'approved') return 'Approved';
+  if (key === 'completed') return 'Completed';
+  if (key === 'rejected') return 'Rejected';
+  if (key === 'pending') return 'Pending';
+  return key || 'Pending';
 };
 
 export default function NgoDashboard() {
@@ -50,6 +96,9 @@ export default function NgoDashboard() {
     pendingCertificateCount: 0
   });
   const [campaignVolunteers, setCampaignVolunteers] = useState([]);
+  const [campaignUpdateAnalytics, setCampaignUpdateAnalytics] = useState(buildEmptyCampaignUpdateAnalytics());
+  const [campaignUpdateAnalyticsLoading, setCampaignUpdateAnalyticsLoading] = useState(true);
+  const [campaignUpdateAnalyticsMessage, setCampaignUpdateAnalyticsMessage] = useState('');
 
   const [donationApprovals, setDonationApprovals] = useState([]);
   const [volunteerApprovals, setVolunteerApprovals] = useState([]);
@@ -67,6 +116,8 @@ export default function NgoDashboard() {
   const [helpRequestStatusFilter, setHelpRequestStatusFilter] = useState('all');
   const [helpRequestActionState, setHelpRequestActionState] = useState({});
   const [selectedHelpRequest, setSelectedHelpRequest] = useState(null);
+  const [teamListOpen, setTeamListOpen] = useState(false);
+  const [memberQuery, setMemberQuery] = useState('');
 
   const volunteerSignupTotal = useMemo(
     () => Number(volunteerSummary.totalRequests || 0) + Number(campaignVolunteerSummary.totalVolunteers || 0),
@@ -88,30 +139,189 @@ export default function NgoDashboard() {
       approved: 0,
       inProgress: 0,
       completed: 0,
-      rejected: 0
+      rejected: 0,
+      other: 0
     };
-
-    const normalize = (value) => String(value || '').trim().toLowerCase();
 
     for (const req of helpRequests || []) {
       summary.total += 1;
-      const status = normalize(req?.status || 'Pending');
+      const status = normalizeSupportRequestStatus(req?.status || 'Pending');
       if (status === 'pending') summary.pending += 1;
       else if (status === 'approved') summary.approved += 1;
       else if (status === 'in progress') summary.inProgress += 1;
       else if (status === 'completed') summary.completed += 1;
       else if (status === 'rejected') summary.rejected += 1;
+      else summary.other += 1;
     }
 
     return summary;
   }, [helpRequests]);
+
+  const campaignNameById = useMemo(() => {
+    const map = new Map();
+    for (const row of campaignVolunteers || []) {
+      const campaignId = String(row?.campaign?.id || '').trim();
+      const campaignTitle = String(row?.campaign?.title || '').trim();
+      if (campaignId && campaignTitle) map.set(campaignId, campaignTitle);
+    }
+    for (const row of campaignUpdateAnalytics?.campaigns || []) {
+      const campaignId = String(row?.campaignId || '').trim();
+      const campaignTitle = String(row?.campaignTitle || '').trim();
+      if (campaignId && campaignTitle) map.set(campaignId, campaignTitle);
+    }
+    return map;
+  }, [campaignVolunteers, campaignUpdateAnalytics]);
+
+  const memberRows = useMemo(() => {
+    const members = Array.isArray(ngo?.members) ? ngo.members : [];
+    return members
+      .map((member, index) => {
+        if (!member || typeof member !== 'object') return null;
+        const id = String(member.id || `member-${index}`).trim();
+        const name = String(member.name || '').trim();
+        if (!name) return null;
+        const role = String(member.role || '').trim();
+        const tasksCompleted = Number(member.tasksCompleted || 0);
+        const contributions = String(member.contributions || '').trim();
+        const badges = [...new Set(
+          (Array.isArray(member.badges) ? member.badges : [])
+            .map((badge) => String(badge || '').trim())
+            .filter(Boolean)
+        )];
+        const tasks = [...new Set(
+          (Array.isArray(member.tasks) ? member.tasks : [])
+            .map((task) => String(task || '').trim())
+            .filter(Boolean)
+        )];
+
+        const campaignAssignments = (Array.isArray(member.campaignAssignments) ? member.campaignAssignments : [])
+          .map((assignment, assignmentIndex) => {
+            if (!assignment || typeof assignment !== 'object') return null;
+            const campaignId = String(assignment.campaignId || '').trim();
+            const campaignTitleFromMap = campaignId ? campaignNameById.get(campaignId) : '';
+            const campaignTitle = String(assignment.campaignTitle || campaignTitleFromMap || '').trim();
+            const task = String(assignment.task || '').trim();
+            const contribution = String(assignment.contribution || '').trim();
+            if (!campaignId && !campaignTitle && !task && !contribution) return null;
+            return {
+              id: `${id}-assignment-${assignmentIndex}`,
+              campaignId,
+              campaignTitle,
+              task,
+              contribution
+            };
+          })
+          .filter(Boolean);
+
+        return {
+          id,
+          name,
+          role,
+          tasksCompleted: Number.isFinite(tasksCompleted) && tasksCompleted >= 0 ? Math.floor(tasksCompleted) : 0,
+          contributions,
+          badges,
+          tasks,
+          campaignAssignments
+        };
+      })
+      .filter(Boolean);
+  }, [ngo, campaignNameById]);
+
+  const teamStrengthRows = useMemo(() => {
+    const fromNgo = Array.isArray(ngo?.teamStrengthList) ? ngo.teamStrengthList : [];
+    const normalizedFromNgo = fromNgo
+      .map((entry, index) => {
+        if (!entry || typeof entry !== 'object') return null;
+        const role = String(entry.role || '').trim();
+        const contribution = String(entry.contribution || '').trim();
+        const count = Number(entry.count || 0);
+        if (!role || !Number.isFinite(count) || count <= 0) return null;
+        return {
+          id: `team-strength-${index}-${role.toLowerCase().replace(/\s+/g, '-')}`,
+          role,
+          count: Math.floor(count),
+          contribution
+        };
+      })
+      .filter(Boolean);
+    if (normalizedFromNgo.length > 0) {
+      return normalizedFromNgo.sort((a, b) => b.count - a.count);
+    }
+
+    if (memberRows.length === 0) return [];
+    const grouped = new Map();
+    memberRows.forEach((member) => {
+      const role = String(member.role || 'General Team').trim();
+      if (!grouped.has(role)) {
+        grouped.set(role, {
+          id: `derived-team-${role.toLowerCase().replace(/\s+/g, '-')}`,
+          role,
+          count: 0,
+          contribution: member.contributions || ''
+        });
+      }
+      const row = grouped.get(role);
+      row.count += 1;
+      if (!row.contribution && member.contributions) row.contribution = member.contributions;
+    });
+    return Array.from(grouped.values()).sort((a, b) => b.count - a.count);
+  }, [ngo, memberRows]);
+
+  const totalMemberTasksCompleted = useMemo(
+    () => memberRows.reduce((sum, member) => sum + Number(member.tasksCompleted || 0), 0),
+    [memberRows]
+  );
+
+  const memberCampaignCount = useMemo(() => {
+    const seen = new Set();
+    memberRows.forEach((member) => {
+      member.campaignAssignments.forEach((assignment) => {
+        const key = String(assignment.campaignId || assignment.campaignTitle || '').trim();
+        if (key) seen.add(key);
+      });
+    });
+    return seen.size;
+  }, [memberRows]);
+
+  const memberOfMonthCount = useMemo(() => {
+    const explicit = memberRows.filter((member) =>
+      member.badges.some((badge) => /member of the month/i.test(String(badge || '')))
+    ).length;
+    if (explicit > 0) return explicit;
+
+    const maxTasksCompleted = memberRows.reduce((max, member) => Math.max(max, Number(member.tasksCompleted || 0)), 0);
+    if (maxTasksCompleted <= 0) return 0;
+    return memberRows.filter((member) => Number(member.tasksCompleted || 0) === maxTasksCompleted).length;
+  }, [memberRows]);
+
+  const filteredMemberRows = useMemo(() => {
+    const query = String(memberQuery || '').trim().toLowerCase();
+    if (!query) return memberRows;
+    return memberRows.filter((member) => {
+      const assignmentText = member.campaignAssignments
+        .map((assignment) => [assignment.campaignTitle, assignment.task, assignment.contribution].filter(Boolean).join(' '))
+        .join(' ');
+      const haystack = [
+        member.name,
+        member.role,
+        member.contributions,
+        ...member.badges,
+        ...member.tasks,
+        assignmentText
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [memberRows, memberQuery]);
 
   const filteredHelpRequests = useMemo(() => {
     const q = helpRequestQuery.trim().toLowerCase();
     const filter = String(helpRequestStatusFilter || 'all').trim().toLowerCase();
 
     const rows = (helpRequests || []).filter((req) => {
-      const status = String(req?.status || 'Pending').trim().toLowerCase();
+      const status = normalizeSupportRequestStatus(req?.status || 'Pending');
       if (filter !== 'all' && status !== filter) return false;
 
       if (!q) return true;
@@ -154,6 +364,8 @@ export default function NgoDashboard() {
 
   const loadDashboardData = async () => {
     setLoading(true);
+    setCampaignUpdateAnalyticsLoading(true);
+    setCampaignUpdateAnalyticsMessage('');
     try {
       const [ngoRes, donationRes, volunteerRes, campaignVolunteersRes, conversationsRes] = await Promise.all([
         api.get('/ngos/me'),
@@ -192,6 +404,16 @@ export default function NgoDashboard() {
       const conversations = conversationsRes.data || [];
       const unread = conversations.reduce((sum, item) => sum + Number(item?.unreadCount || 0), 0);
       setMessageUnreadCount(unread);
+
+      try {
+        const campaignUpdateRes = await getNgoCampaignUpdateAnalytics();
+        setCampaignUpdateAnalytics(campaignUpdateRes.data || buildEmptyCampaignUpdateAnalytics());
+      } catch (analyticsErr) {
+        setCampaignUpdateAnalytics(buildEmptyCampaignUpdateAnalytics());
+        setCampaignUpdateAnalyticsMessage(
+          analyticsErr.response?.data?.message || 'Unable to load campaign update analytics right now.'
+        );
+      }
     } catch (err) {
       setNgo(null);
       setDonationSummary({ completedCount: 0, totalCompletedAmount: 0, pendingCertificateCount: 0 });
@@ -201,8 +423,11 @@ export default function NgoDashboard() {
       setCampaignVolunteerSummary({ campaignsCount: 0, totalVolunteers: 0, totalRegistrations: 0, pendingCertificateCount: 0 });
       setCampaignVolunteers([]);
       setMessageUnreadCount(0);
+      setCampaignUpdateAnalytics(buildEmptyCampaignUpdateAnalytics());
+      setCampaignUpdateAnalyticsMessage('Unable to load campaign update analytics right now.');
     } finally {
       setLoading(false);
+      setCampaignUpdateAnalyticsLoading(false);
     }
   };
 
@@ -325,7 +550,7 @@ export default function NgoDashboard() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4">
             <div className="rounded-lg border border-gray-200 p-4">
               <p className="text-sm text-gray-500">Total Donation Amount</p>
               <p className="text-xl font-bold text-gray-900 mt-1">{currency(donationSummary.totalCompletedAmount)}</p>
@@ -347,13 +572,144 @@ export default function NgoDashboard() {
               <p className="text-xl font-bold text-gray-900 mt-1">{messageUnreadCount}</p>
               <Link to="/messages" className="inline-block mt-2 text-sm text-indigo-600 hover:underline">Open Inbox</Link>
             </div>
+            <button
+              type="button"
+              onClick={() => setTeamListOpen(true)}
+              className="rounded-lg border border-indigo-200 p-4 text-left hover:bg-indigo-50 transition"
+            >
+              <p className="text-sm text-gray-500">Members & Team List</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">{memberRows.length}</p>
+              <p className="text-xs text-indigo-700 mt-1">
+                {teamStrengthRows.length} roles • {memberCampaignCount} campaigns
+              </p>
+            </button>
             <div className="rounded-lg border border-gray-200 p-4">
               <p className="text-sm text-gray-500">Support Requests</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">{supportRequestSummary.pending}</p>
-              <p className="text-xs text-gray-500 mt-1">{supportRequestSummary.total} total</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">{supportRequestSummary.total}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Pending: {supportRequestSummary.pending} • Approved: {supportRequestSummary.approved} • Completed: {supportRequestSummary.completed}
+              </p>
+              <p className="text-xs text-gray-500">
+                In progress: {supportRequestSummary.inProgress} • Rejected: {supportRequestSummary.rejected}
+                {supportRequestSummary.other > 0 ? ` • Other: ${supportRequestSummary.other}` : ''}
+              </p>
             </div>
           </div>
+          <div className="mt-4">
+            <Link
+              to="/innovation-center"
+              className="inline-flex items-center px-4 py-2 rounded-lg border border-indigo-200 text-indigo-700 font-semibold hover:bg-indigo-50"
+            >
+              Open Innovation Center
+            </Link>
+          </div>
         </header>
+
+        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Campaign Update Analytics</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Delivery and engagement trends for donor updates across all your campaigns.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadDashboardData}
+              className="px-3 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+            >
+              Refresh Analytics
+            </button>
+          </div>
+
+          {campaignUpdateAnalyticsMessage && (
+            <div className="mt-4 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+              {campaignUpdateAnalyticsMessage}
+            </div>
+          )}
+
+          {campaignUpdateAnalyticsLoading ? (
+            <p className="mt-4 text-gray-600">Loading campaign update analytics...</p>
+          ) : (
+            <>
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">Updates Published</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1">{Number(campaignUpdateAnalytics?.totals?.updatesCount || 0)}</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">In-App Delivered</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1">{Number(campaignUpdateAnalytics?.totals?.sentCount || 0)}</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">Open Rate</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1">{toPercent(campaignUpdateAnalytics?.totals?.openRate || 0)}</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">Click Rate</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1">{toPercent(campaignUpdateAnalytics?.totals?.clickRate || 0)}</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">Email Delivery</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1">{toPercent(campaignUpdateAnalytics?.totals?.emailDeliveryRate || 0)}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-700">
+                    <tr>
+                      <th className="text-left px-3 py-2">Campaign</th>
+                      <th className="text-left px-3 py-2">Updates</th>
+                      <th className="text-left px-3 py-2">Recipients</th>
+                      <th className="text-left px-3 py-2">Open / Click</th>
+                      <th className="text-left px-3 py-2">Email</th>
+                      <th className="text-left px-3 py-2">Last Update</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(campaignUpdateAnalytics?.campaigns || []).length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-3 py-6 text-center text-gray-500">
+                          No campaign updates published yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      (campaignUpdateAnalytics.campaigns || []).slice(0, 12).map((item) => {
+                        const totals = item?.totals || {};
+                        return (
+                          <tr key={item.campaignId} className="border-t border-gray-100">
+                            <td className="px-3 py-2 text-gray-800">
+                              <Link to={`/campaigns/${item.campaignId}`} className="font-medium text-indigo-700 hover:underline">
+                                {item.campaignTitle || 'Campaign'}
+                              </Link>
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">{Number(totals.updatesCount || 0)}</td>
+                            <td className="px-3 py-2 text-gray-700">
+                              <p>{Number(totals.targetDonors || 0)} targeted</p>
+                              <p className="text-xs text-gray-500">{Number(totals.sentCount || 0)} delivered</p>
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">
+                              <p>Open: {toPercent(totals.openRate || 0)}</p>
+                              <p className="text-xs text-gray-500">Click: {toPercent(totals.clickRate || 0)}</p>
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">
+                              <p>{Number(totals.emailSentCount || 0)} sent</p>
+                              <p className="text-xs text-gray-500">
+                                {Number(totals.emailAttemptedCount || 0)} attempts
+                              </p>
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">{when(item.lastUpdateAt)}</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </section>
 
         <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4">
@@ -496,7 +852,8 @@ export default function NgoDashboard() {
                 Requests submitted by beneficiaries. Update the status as your team responds.
               </p>
               <p className="text-xs text-gray-500 mt-2">
-                Pending: {supportRequestSummary.pending} • Approved: {supportRequestSummary.approved} • In progress: {supportRequestSummary.inProgress} • Completed: {supportRequestSummary.completed}
+                Pending: {supportRequestSummary.pending} • Approved: {supportRequestSummary.approved} • In progress: {supportRequestSummary.inProgress} • Completed: {supportRequestSummary.completed} • Rejected: {supportRequestSummary.rejected}
+                {supportRequestSummary.other > 0 ? ` • Other: ${supportRequestSummary.other}` : ''}
               </p>
             </div>
             <button
@@ -559,8 +916,8 @@ export default function NgoDashboard() {
                     </tr>
                   ) : (
                     filteredHelpRequests.slice(0, 30).map((item) => {
-                      const rawStatus = String(item.status || 'Pending');
-                      const status = rawStatus.trim().toLowerCase();
+                      const status = normalizeSupportRequestStatus(item?.status || 'Pending');
+                      const statusLabel = toSupportRequestStatusLabel(status);
                       const busy = Boolean(helpRequestActionState[item.id]);
                       const badgeClass = status === 'completed'
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -598,7 +955,7 @@ export default function NgoDashboard() {
                           <td className="px-3 py-2 text-gray-700">{item.location || '-'}</td>
                           <td className="px-3 py-2 text-gray-700">
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${badgeClass}`}>
-                              {rawStatus}
+                              {statusLabel}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-gray-700">
@@ -923,6 +1280,176 @@ export default function NgoDashboard() {
             <Link to="/messages" className="px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 font-medium text-gray-800">Open Messages</Link>
           </div>
         </section>
+
+        {teamListOpen && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+              <div className="p-5 border-b flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Members & Team List</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Detailed view of team strength, member tasks, campaign assignments, and contributions.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTeamListOpen(false)}
+                  className="text-sm font-semibold text-gray-600 hover:text-gray-900"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="p-5 space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-sm text-gray-500">Total Members</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{memberRows.length}</p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-sm text-gray-500">Tasks Completed</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{Number(totalMemberTasksCompleted || 0)}</p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-sm text-gray-500">Campaign Coverage</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{memberCampaignCount}</p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-sm text-gray-500">Member of the Month</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{memberOfMonthCount}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <h4 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Team Strength Breakdown</h4>
+                  {teamStrengthRows.length > 0 ? (
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {teamStrengthRows.map((row) => (
+                        <div key={row.id} className="rounded-lg border border-gray-200 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-semibold text-gray-900">{row.role}</p>
+                            <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full">
+                              {row.count} members
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {row.contribution || 'Contribution details are not documented yet.'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-500">No team strength data available.</p>
+                  )}
+                </div>
+
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <h4 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">
+                    Member Details
+                  </h4>
+                  <input
+                    value={memberQuery}
+                    onChange={(e) => setMemberQuery(e.target.value)}
+                    placeholder="Search member, role, task, campaign, contribution…"
+                    className="w-full md:w-96 px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                  />
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-700">
+                      <tr>
+                        <th className="text-left px-3 py-2">Member</th>
+                        <th className="text-left px-3 py-2">Role</th>
+                        <th className="text-left px-3 py-2">Tasks Completed</th>
+                        <th className="text-left px-3 py-2">Badges</th>
+                        <th className="text-left px-3 py-2">Tasks</th>
+                        <th className="text-left px-3 py-2">Campaign Assignments</th>
+                        <th className="text-left px-3 py-2">Contribution</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredMemberRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-3 py-6 text-center text-gray-500">
+                            No members found for this search.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredMemberRows.map((member) => (
+                          <tr key={member.id} className="border-t border-gray-100 align-top">
+                            <td className="px-3 py-2 text-gray-800 font-medium">{member.name}</td>
+                            <td className="px-3 py-2 text-gray-700">{member.role || '-'}</td>
+                            <td className="px-3 py-2 text-gray-900 font-semibold">{member.tasksCompleted}</td>
+                            <td className="px-3 py-2 text-gray-700 min-w-[220px]">
+                              {member.badges.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {member.badges.map((badge, index) => (
+                                    <span
+                                      key={`${member.id}-badge-${index}`}
+                                      className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-amber-50 text-amber-700 border border-amber-200"
+                                    >
+                                      {badge}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">No badges yet</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">
+                              {member.tasks.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {member.tasks.map((task, index) => (
+                                    <span key={`${member.id}-task-${index}`} className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-indigo-50 text-indigo-700">
+                                      {task}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">No tasks listed</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700 min-w-[260px]">
+                              {member.campaignAssignments.length > 0 ? (
+                                <div className="space-y-2">
+                                  {member.campaignAssignments.map((assignment) => (
+                                    <div key={assignment.id} className="rounded-md border border-gray-200 bg-gray-50 p-2">
+                                      <p className="text-xs font-semibold text-gray-800">
+                                        {assignment.campaignId ? (
+                                          <Link to={`/campaigns/${assignment.campaignId}`} className="text-indigo-700 hover:underline">
+                                            {assignment.campaignTitle || 'Campaign'}
+                                          </Link>
+                                        ) : (
+                                          assignment.campaignTitle || 'Campaign'
+                                        )}
+                                      </p>
+                                      {assignment.task && (
+                                        <p className="text-xs text-gray-600 mt-1">Task: {assignment.task}</p>
+                                      )}
+                                      {assignment.contribution && (
+                                        <p className="text-xs text-gray-500 mt-1">{assignment.contribution}</p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">No campaign assignments listed</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">
+                              {member.contributions || <span className="text-xs text-gray-400">Not documented</span>}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {selectedHelpRequest && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">

@@ -9,6 +9,7 @@
 ## Table of Contents
 
 1. [Executive Summary](#1-executive-summary)
+   - 1.1 [Recent Phase Additions](#11-recent-phase-additions)
 2. [System Overview](#2-system-overview)
 3. [Architecture](#3-architecture)
    - 3.1 [High-Level Architecture](#31-high-level-architecture)
@@ -64,6 +65,63 @@
 - **AI-powered features** including personalized NGO/campaign recommendations, a chatbot with RAG (Retrieval-Augmented Generation) support via Google Gemini, campaign auto-classification, fraud scoring, and volunteer-campaign matching.
 
 The platform is built with a **React 18** frontend communicating via **REST APIs** with a **Node.js/Express** backend, backed by **PostgreSQL** as the primary data store.
+
+### 1.1 Recent Phase Additions
+
+#### Phase 3: Campaign Update Delivery + Engagement Tracking
+- NGOs can publish structured campaign updates.
+- Donors receive personalized in-app notifications and optional SMTP email delivery.
+- Engagement tracking is captured with explicit open/click events.
+- New APIs:
+  - `POST /api/campaigns/:id/updates`
+  - `GET /api/campaigns/:id/updates/analytics`
+  - `POST /api/notifications/:id/open`
+
+#### Phase 4: Outbound Webhooks + NGO Aggregate Analytics
+- Outbound webhook dispatcher introduced with signed payloads (`X-NgoConnect-Signature`).
+- Webhook event types:
+  - `campaign.update.created`
+  - `notification.engagement`
+- NGO dashboard now consumes aggregate campaign-update analytics across all NGO campaigns.
+- New API:
+  - `GET /api/campaigns/ngo/campaign-updates/analytics`
+
+#### Phase 5: Webhook Reliability + Dead-Letter Operations
+- Added persistent outbound webhook delivery logging (`webhook_deliveries_rel`).
+- Failed deliveries are marked as dead-letter and surfaced in Admin Dashboard.
+- Admin replay APIs:
+  - `GET /api/admin/webhooks`
+  - `POST /api/admin/webhooks/:id/retry`
+- Added receiver verification/replay-protection reference:
+  - `backend/docs/webhooks.md`
+  - `backend/scripts/webhookReceiverExample.js`
+
+#### Phase 6: Scheduled Replay Worker + Backlog Alerting
+- Added interval-based dead-letter replay worker with exponential backoff scheduling.
+- Added worker control APIs:
+  - `GET /api/admin/webhooks/worker/status`
+  - `POST /api/admin/webhooks/worker/run`
+- Added dead-letter backlog alerting channels:
+  - SMTP email (`WEBHOOK_ALERT_EMAIL_TO`)
+  - Slack incoming webhook (`WEBHOOK_ALERT_SLACK_URL`)
+
+#### Phase 7: Webhook Metrics + Export APIs
+- Added time-window metrics endpoint for webhook operations:
+  - `GET /api/admin/webhooks/metrics?hours=24`
+- Added webhook delivery export endpoint (CSV/JSON):
+  - `GET /api/admin/webhooks/export`
+- Admin dashboard now includes webhook success-rate metrics and event-level performance view.
+
+#### Phase 8: Delivery Retention Cleanup
+- Added retention cleanup endpoint:
+  - `POST /api/admin/webhooks/cleanup`
+- Added CLI cleanup command:
+  - `npm run webhook:cleanup`
+- Added admin dashboard controls for cleanup dry-run and retention purge.
+
+#### Phase 9: Worker Runtime Visibility
+- Worker status endpoint now returns runtime telemetry (`lastTickAt`, `lastResult`, `lastError`, `tickCount`, `isRunning`).
+- Admin dashboard surfaces worker runtime state for faster operational debugging.
 
 ---
 
@@ -275,7 +333,8 @@ users_rel ──────┬──── donations_rel ──── campaigns
                 ├──── messages_rel
                 ├──── help_requests_rel
                 ├──── flag_requests_rel
-                └──── notifications_rel
+                ├──── notifications_rel
+                └──── webhook_deliveries_rel
 
 ngos_rel ◄──── ngo_categories_rel
 campaigns_rel ◄──── campaign_volunteers_rel
@@ -283,7 +342,7 @@ campaigns_rel ◄──── campaign_volunteer_registrations_rel
 volunteer_opportunities_rel ◄──── opportunity_applicants_rel
 ```
 
-#### Primary Tables (13)
+#### Primary Tables (14)
 
 | Table | Purpose | Key Relationships |
 |-------|---------|-------------------|
@@ -300,6 +359,7 @@ volunteer_opportunities_rel ◄──── opportunity_applicants_rel
 | `help_requests_rel` | Support requests from users to NGOs | `user_id → users_rel`, `ngo_id → ngos_rel` |
 | `flag_requests_rel` | Content moderation flag requests | `requested_by → users_rel`, `resolved_by → users_rel` |
 | `ai_logs_rel` | AI operation audit logs | — |
+| `webhook_deliveries_rel` | Outbound webhook delivery logs and dead-letter queue | — |
 
 #### Junction Tables (4)
 
@@ -738,6 +798,13 @@ All endpoints require `admin` role.
 | 16 | `GET` | `/api/admin/dashboard` | Dashboard snapshot (JSON) — KPI stats, donation/volunteer series, tables |
 | 17 | `GET` | `/api/admin/dashboard/ssr` | Dashboard snapshot (SSR HTML) — same data rendered as full HTML page |
 | 18 | `GET` | `/api/admin/analytics` | Platform analytics — totals, users by month/role, donations by month, top volunteers |
+| 19 | `GET` | `/api/admin/webhooks` | Webhook delivery logs (supports `?status`, `?event`, `?limit`) |
+| 20 | `POST` | `/api/admin/webhooks/:id/retry` | Replay a dead-letter webhook delivery |
+| 21 | `GET` | `/api/admin/webhooks/metrics` | Webhook window metrics (summary, event breakdown, trend) |
+| 22 | `GET` | `/api/admin/webhooks/export` | Export webhook deliveries (CSV or JSON) |
+| 23 | `POST` | `/api/admin/webhooks/cleanup` | Retention cleanup (dry-run or delete) |
+| 24 | `GET` | `/api/admin/webhooks/worker/status` | Read auto-retry worker configuration + runtime telemetry |
+| 25 | `POST` | `/api/admin/webhooks/worker/run` | Execute one immediate worker tick |
 
 ### 6.13 AI & Recommendations (`/api/ai`)
 
@@ -1008,6 +1075,7 @@ User                       Backend                        NGO
 | `help_requests_rel` | User support requests to NGOs with status workflow |
 | `flag_requests_rel` | Content moderation flag requests |
 | `ai_logs_rel` | AI operation audit trail |
+| `webhook_deliveries_rel` | Outbound webhook observability, dead-letter, and replay audit |
 
 #### Junction Tables
 | Table | Columns | Purpose |

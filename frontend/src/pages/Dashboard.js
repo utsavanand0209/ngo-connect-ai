@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import UserDashboard from './UserDashboard';
 import NgoDashboard from './NgoDashboard';
 import AdminDashboard from './AdminDashboard';
+import { getUserRole } from '../utils/auth';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -10,20 +11,13 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setRole(payload.role);
-      } catch (err) {
-        console.error('Failed to decode token, redirecting to login.');
-        navigate('/login');
-      } finally {
-        setLoading(false);
-      }
-    } else {
+    const resolvedRole = getUserRole();
+    if (!resolvedRole) {
       navigate('/login');
+      return;
     }
+    setRole(resolvedRole);
+    setLoading(false);
   }, [navigate]);
 
   if (loading) {
@@ -38,8 +32,6 @@ export default function Dashboard() {
     case 'user':
       return <UserDashboard />;
     default:
-      // Redirect to login if role is not recognized
-      navigate('/login');
-      return null;
+      return <Navigate to="/login" replace />;
   }
 }

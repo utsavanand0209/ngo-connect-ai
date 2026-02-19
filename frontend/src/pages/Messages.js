@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { getTokenPayload } from '../utils/auth';
 import {
   getMessageConversations,
   getMessageThread,
@@ -9,16 +10,6 @@ import {
   sendMessageToUser
 } from '../services/api';
 
-const parseToken = () => {
-  const token = localStorage.getItem('token');
-  if (!token) return null;
-  try {
-    return JSON.parse(atob(token.split('.')[1]));
-  } catch (err) {
-    return null;
-  }
-};
-
 const fmt = (value) => {
   const parsed = Date.parse(value || '');
   if (Number.isNaN(parsed)) return 'N/A';
@@ -27,7 +18,7 @@ const fmt = (value) => {
 
 export default function Messages() {
   const [searchParams] = useSearchParams();
-  const tokenPayload = parseToken();
+  const tokenPayload = getTokenPayload();
   const role = tokenPayload?.role;
   const preferredNgoId = searchParams.get('ngo') || '';
 

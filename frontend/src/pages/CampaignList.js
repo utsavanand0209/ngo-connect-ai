@@ -21,6 +21,7 @@ export default function CampaignList() {
   const role = getUserRole();
   const isAdmin = role === 'admin';
   const isUser = role === 'user';
+  const isNgo = role === 'ngo';
 
   useEffect(() => {
     setLoading(true);
@@ -108,6 +109,8 @@ export default function CampaignList() {
         await api.post(`/campaigns/${selectedCampaign.id}/flag-request`, { reason: flagReason });
         setRequestedIds(prev => [...new Set([...prev, selectedCampaign.id])]);
         setFlagMessage('Request sent to admin for review.');
+      } else if (isNgo) {
+        setFlagMessage('NGO accounts cannot request admin review.');
       } else {
         setFlagMessage('Please login to submit a request.');
       }
@@ -216,7 +219,7 @@ export default function CampaignList() {
                     })()}
                     <button
                       onClick={() => openFlagModal(c)}
-                      disabled={c.flagged || requestedIds.includes(c.id)}
+                      disabled={c.flagged || requestedIds.includes(c.id) || isNgo}
                       className="w-full inline-block text-center px-6 py-2 border border-red-600 text-red-600 font-semibold rounded-lg hover:bg-red-50 disabled:text-gray-400 disabled:border-gray-300"
                     >
                       {c.flagged
@@ -225,7 +228,11 @@ export default function CampaignList() {
                           ? 'Request Sent'
                           : isAdmin
                             ? 'Flag Campaign'
-                            : 'Request Admin Review'}
+                            : isUser
+                              ? 'Request Admin Review'
+                              : isNgo
+                                ? 'Unavailable for NGO accounts'
+                                : 'Login to Request Review'}
                     </button>
                     {flagMessage && selectedCampaign && selectedCampaign.id === c.id && (
                       <p className="text-xs text-gray-600 text-center">{flagMessage}</p>
@@ -244,13 +251,15 @@ export default function CampaignList() {
       </div>
       <ConfirmModal
         open={modalOpen}
-        title={isAdmin ? 'Flag Campaign' : 'Request Admin Review'}
+        title={isAdmin ? 'Flag Campaign' : isUser ? 'Request Admin Review' : 'Report Campaign'}
         description={
           isAdmin
             ? 'This will mark the campaign as flagged and visible to admins.'
-            : 'Your request will be sent to the admin team for review.'
+            : isUser
+              ? 'Your request will be sent to the admin team for review.'
+              : 'Only user accounts can request admin review.'
         }
-        confirmLabel={isAdmin ? 'Flag Campaign' : 'Send Request'}
+        confirmLabel={isAdmin ? 'Flag Campaign' : isUser ? 'Send Request' : 'Submit'}
         onConfirm={handleFlagSubmit}
         onCancel={closeFlagModal}
         loading={flagLoading}

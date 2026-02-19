@@ -10,6 +10,18 @@ const HelpRequest = require('../models/HelpRequest');
 const auth = require('../middleware/auth');
 const { query } = require('../db/postgres');
 const { renderAdminDashboardHtml } = require('../utils/adminDashboardSsr');
+const { dispatchWebhook } = require('../utils/webhookDispatcher');
+const {
+  listWebhookDeliveries,
+  getWebhookDeliveryByExternalId,
+  updateWebhookDeliveryAfterRetry,
+  getWebhookDashboardSnapshot,
+  getWebhookMetrics,
+  listWebhookDeliveriesForExport,
+  cleanupWebhookDeliveries,
+  ensureTableAvailable
+} = require('../utils/webhookDeliveryStore');
+const { runWebhookAutoRetryTick, getWorkerConfig, getWorkerRuntimeStatus } = require('../utils/webhookAutoRetryWorker');
 
 const toDoc = (row, idField, docField) => {
   const doc = row?.[docField] && typeof row[docField] === 'object' ? { ...row[docField] } : {};
@@ -56,10 +68,29 @@ const toDateOrNull = (value) => {
 
 const DASHBOARD_SNAPSHOT_CACHE_TTL_MS = 1500;
 const dashboardSnapshotCache = new Map();
+const EMPTY_WEBHOOK_SNAPSHOT = {
+  tableAvailable: false,
+  summary: {
+    total: 0,
+    delivered: 0,
+    deadLetter: 0,
+    skipped: 0,
+    replayedSuccess: 0,
+    replayedFailed: 0
+  },
+  deadLetters: []
+};
 
 const normalizeFlagRequestStatus = (value) => {
   const raw = String(value || '').trim().toLowerCase();
   return raw || 'pending';
+};
+
+const toCsvValue = (value) => {
+  if (value === null || value === undefined) return '';
+  const text = String(value);
+  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
 };
 
 const computeAdminDashboardSnapshot = async ({ limit, days }) => {
@@ -75,7 +106,8 @@ const computeAdminDashboardSnapshot = async ({ limit, days }) => {
     { rows: flaggedNgoRows = [] },
     { rows: flaggedCampaignRows = [] },
     { rows: supportRequestRows = [] },
-    { rows: [supportRequestStatusRow = {}] }
+    { rows: [supportRequestStatusRow = {}] },
+    webhookSnapshot = EMPTY_WEBHOOK_SNAPSHOT
   ] = await Promise.all([
     query(
       `
@@ -369,7 +401,9 @@ const computeAdminDashboardSnapshot = async ({ limit, days }) => {
         ) AS rejected_count
       FROM help_requests_rel
       `
-    )
+    ),
+    getWebhookDashboardSnapshot({ deadLetterLimit: Math.min(limit, 12) })
+      .catch(() => EMPTY_WEBHOOK_SNAPSHOT)
   ]);
 
   const stats = {
@@ -388,7 +422,10 @@ const computeAdminDashboardSnapshot = async ({ limit, days }) => {
     volunteerApplicationsCount: Number(statsRow.volunteer_applications_count || 0),
     volunteerCompletedCount: Number(statsRow.volunteer_completed_count || 0),
     campaignVolunteersCount: Number(statsRow.campaign_volunteers_count || 0),
-    campaignVolunteerRegistrationsCount: Number(statsRow.campaign_volunteer_registrations_count || 0)
+    campaignVolunteerRegistrationsCount: Number(statsRow.campaign_volunteer_registrations_count || 0),
+    webhookDeliveriesTotal: Number(webhookSnapshot?.summary?.total || 0),
+    webhookDeliveredCount: Number(webhookSnapshot?.summary?.delivered || 0),
+    webhookDeadLetterCount: Number(webhookSnapshot?.summary?.deadLetter || 0)
   };
 
   const campaigns = campaignRows.map((row) => {
@@ -657,7 +694,8 @@ const computeAdminDashboardSnapshot = async ({ limit, days }) => {
     volunteerApplications,
     campaignVolunteerRegistrations,
     supportRequestsSummary,
-    supportRequests
+    supportRequests,
+    webhooks: webhookSnapshot
   };
 };
 
@@ -883,6 +921,224 @@ router.post('/notifications', auth(['admin']), async (req, res) => {
     res.json(notification);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Webhook observability and dead-letter replay (admin)
+router.get('/webhooks', auth(['admin']), async (req, res) => {
+  try {
+    const tableAvailable = await ensureTableAvailable();
+    if (!tableAvailable) {
+      return res.json({
+        tableAvailable: false,
+        rows: []
+      });
+    }
+
+    const status = String(req.query.status || '').trim();
+    const event = String(req.query.event || '').trim();
+    const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 200);
+    const rows = await listWebhookDeliveries({ status, event, limit });
+    return res.json({
+      tableAvailable: true,
+      rows
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.get('/webhooks/metrics', auth(['admin']), async (req, res) => {
+  try {
+    const hours = Math.min(Math.max(Number(req.query.hours) || 24, 1), 24 * 30);
+    const event = String(req.query.event || '').trim();
+    const metrics = await getWebhookMetrics({ hours, event });
+    return res.json(metrics);
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.get('/webhooks/export', auth(['admin']), async (req, res) => {
+  try {
+    const status = String(req.query.status || '').trim();
+    const event = String(req.query.event || '').trim();
+    const from = String(req.query.from || '').trim();
+    const to = String(req.query.to || '').trim();
+    const format = String(req.query.format || 'csv').trim().toLowerCase();
+    const limit = Math.min(Math.max(Number(req.query.limit) || 1000, 1), 5000);
+
+    const rows = await listWebhookDeliveriesForExport({
+      status,
+      event,
+      from,
+      to,
+      limit
+    });
+
+    if (format === 'json') {
+      return res.json({
+        rows,
+        count: rows.length
+      });
+    }
+
+    const headers = [
+      'id',
+      'event',
+      'status',
+      'targetUrl',
+      'deliveryId',
+      'attempts',
+      'responseStatus',
+      'failureReason',
+      'createdAt',
+      'lastAttemptAt',
+      'nextRetryAt',
+      'deliveredAt',
+      'resolvedAt',
+      'isManualRetry',
+      'parentDeliveryExternalId'
+    ];
+
+    const lines = [headers.join(',')];
+    for (const row of rows) {
+      lines.push([
+        toCsvValue(row.id || ''),
+        toCsvValue(row.event || ''),
+        toCsvValue(row.status || ''),
+        toCsvValue(row.targetUrl || ''),
+        toCsvValue(row.deliveryId || ''),
+        toCsvValue(Number(row.attempts || 0)),
+        toCsvValue(row.responseStatus ?? ''),
+        toCsvValue(row.failureReason || row?.replay?.reason || ''),
+        toCsvValue(row.createdAt || ''),
+        toCsvValue(row.lastAttemptAt || ''),
+        toCsvValue(row.nextRetryAt || ''),
+        toCsvValue(row.deliveredAt || ''),
+        toCsvValue(row.resolvedAt || ''),
+        toCsvValue(Boolean(row.isManualRetry)),
+        toCsvValue(row.parentDeliveryExternalId || '')
+      ].join(','));
+    }
+
+    const filename = `webhooks_export_${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=\"${filename}\"`);
+    return res.send(lines.join('\n'));
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.post('/webhooks/cleanup', auth(['admin']), async (req, res) => {
+  try {
+    const olderThanDays = Math.min(Math.max(Number(req.body?.olderThanDays) || 30, 1), 3650);
+    const limit = Math.min(Math.max(Number(req.body?.limit) || 2000, 1), 10000);
+    const dryRun = ['true', '1', 'yes', 'y', 'on'].includes(String(req.body?.dryRun || '').trim().toLowerCase());
+    const statuses = Array.isArray(req.body?.statuses) ? req.body.statuses : undefined;
+
+    const result = await cleanupWebhookDeliveries({
+      olderThanDays,
+      limit,
+      dryRun,
+      statuses
+    });
+
+    return res.json({
+      message: dryRun
+        ? `Cleanup dry run completed. Matched ${Number(result.matched || 0)} rows.`
+        : `Cleanup completed. Deleted ${Number(result.deleted || 0)} rows.`,
+      result
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.post('/webhooks/:id/retry', auth(['admin']), async (req, res) => {
+  try {
+    const deliveryId = String(req.params.id || '').trim();
+    if (!deliveryId) return res.status(400).json({ message: 'Webhook delivery id is required.' });
+
+    const record = await getWebhookDeliveryByExternalId(deliveryId);
+    if (!record) {
+      return res.status(404).json({ message: 'Webhook delivery record not found.' });
+    }
+
+    const event = String(record.event || '').trim();
+    const payloadData = record?.request?.body?.data;
+    if (!event || payloadData === undefined) {
+      return res.status(422).json({ message: 'Stored webhook payload is incomplete and cannot be retried.' });
+    }
+
+    const retries = Math.min(Math.max(Number(req.body?.retries) || 1, 1), 5);
+    const replayResult = await dispatchWebhook(event, payloadData, {
+      retries,
+      isManualRetry: true,
+      parentDeliveryExternalId: deliveryId
+    });
+
+    const replayStatus = replayResult?.sent ? 'replayed_success' : 'replayed_failed';
+    const updatedRecord = await updateWebhookDeliveryAfterRetry(deliveryId, {
+      replayStatus,
+      replayedBy: req.user.id,
+      replayResult: {
+        sent: Boolean(replayResult?.sent),
+        attempted: Boolean(replayResult?.attempted),
+        reason: String(replayResult?.reason || ''),
+        statusCode: replayResult?.statusCode ?? null,
+        attempts: Number(replayResult?.attempts || 0),
+        replayLogId: replayResult?.logId || null
+      }
+    });
+
+    return res.json({
+      message: replayResult?.sent ? 'Webhook replay delivered successfully.' : 'Webhook replay failed.',
+      replay: replayResult,
+      updatedRecord
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.get('/webhooks/worker/status', auth(['admin']), async (req, res) => {
+  try {
+    const cfg = getWorkerConfig();
+    const runtime = getWorkerRuntimeStatus();
+    return res.json({
+      enabled: Boolean(cfg.enabled),
+      intervalMs: cfg.intervalMs,
+      batchSize: cfg.batchSize,
+      replayAttempts: cfg.replayAttempts,
+      alertEnabled: Boolean(cfg.alertEnabled),
+      alertThreshold: cfg.alertThreshold,
+      alertCooldownMs: cfg.alertCooldownMs,
+      alertEmailToCount: Array.isArray(cfg.alertEmailTo) ? cfg.alertEmailTo.length : 0,
+      slackConfigured: Boolean(cfg.alertSlackUrl),
+      runtime
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.post('/webhooks/worker/run', auth(['admin']), async (req, res) => {
+  try {
+    const cfg = getWorkerConfig();
+    if (!cfg.enabled) {
+      return res.status(400).json({
+        message: 'Webhook auto-retry worker is disabled. Set WEBHOOK_AUTO_RETRY_ENABLED=true.'
+      });
+    }
+    const result = await runWebhookAutoRetryTick(cfg);
+    return res.json({
+      message: 'Webhook auto-retry tick executed.',
+      result
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 

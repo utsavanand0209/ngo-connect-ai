@@ -16,6 +16,7 @@ const {
   verifyPayment
 } = require('../services/paymentGateway');
 const { query } = require('../db/postgres');
+const { awardPoints } = require('../utils/gamification');
 
 const RECEIPT_PREFIX = 'RCP';
 
@@ -243,6 +244,22 @@ const finalizeCompletedDonation = async ({
   const currentAmount = Number(campaign.currentAmount || 0);
   campaign.currentAmount = currentAmount + Number(donation.amount || 0);
   await campaign.save();
+
+  const donorExternalId = getRefId(donation.user);
+  if (donorExternalId) {
+    try {
+      await awardPoints(donorExternalId, {
+        points: Math.max(12, Math.round(Number(donation.amount || 0) / 200)),
+        eventType: 'donation_completed',
+        badgeKey: Number(donation.amount || 0) >= 5000 ? 'generous_donor' : 'donor_starter',
+        reason: `Completed donation for campaign ${getRefId(donation.campaign) || ''}`.trim(),
+        referenceType: 'donation',
+        referenceId: donation.id
+      });
+    } catch (err) {
+      // best effort reward awarding
+    }
+  }
 
   return donation;
 };
@@ -526,6 +543,21 @@ router.post('/:id/certificate/decision', auth(['ngo']), async (req, res) => {
     await donation.save();
 
     const certificate = await issueDonationCertificate(donation);
+    const donorExternalId = getRefId(donation.user);
+    if (donorExternalId) {
+      try {
+        await awardPoints(donorExternalId, {
+          points: 16,
+          eventType: 'donation_certificate_approved',
+          badgeKey: 'verified_supporter',
+          reason: 'Donation certificate approved by NGO.',
+          referenceType: 'donation_certificate',
+          referenceId: donation.id
+        });
+      } catch (err) {
+        // best effort reward awarding
+      }
+    }
 
     res.json({
       message: 'Certificate request approved and certificate issued.',

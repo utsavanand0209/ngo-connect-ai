@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
-import { getUserRole } from '../utils/auth';
+import { getTokenPayload, getUserRole } from '../utils/auth';
 import { processDonationWithGateway } from '../utils/paymentGateway';
 import { buildDirectionsUrl, getCampaignCoordinates, getCampaignLocationText } from '../utils/location';
+import { getCampaignUpdateAnalytics, postCampaignUpdate } from '../services/api';
 
 const netbankingBanks = [
   'State Bank of India',
@@ -33,6 +34,29 @@ const initialVolunteerForm = {
   motivation: ''
 };
 
+const normalizeCampaignUpdateEntry = (item, index) => {
+  if (typeof item === 'string') {
+    return {
+      id: `legacy-${index}`,
+      headline: 'Campaign Update',
+      message: item,
+      impactSummary: '',
+      createdAt: null,
+      delivery: null
+    };
+  }
+
+  const entry = item && typeof item === 'object' ? item : {};
+  return {
+    id: entry.id || `upd-${index}`,
+    headline: String(entry.headline || entry.title || 'Campaign Update').trim(),
+    message: String(entry.message || entry.text || '').trim(),
+    impactSummary: String(entry.impactSummary || '').trim(),
+    createdAt: entry.createdAt || entry.date || null,
+    delivery: entry.delivery && typeof entry.delivery === 'object' ? { ...entry.delivery } : null
+  };
+};
+
 export default function CampaignDetails() {
   const { id } = useParams();
   const [campaign, setCampaign] = useState(null);
@@ -59,10 +83,21 @@ export default function CampaignDetails() {
   const [flagLoading, setFlagLoading] = useState(false);
   const [flagModalOpen, setFlagModalOpen] = useState(false);
   const [directionsLoading, setDirectionsLoading] = useState(false);
+  const [principalId, setPrincipalId] = useState('');
+  const [ngoUpdateHeadline, setNgoUpdateHeadline] = useState('');
+  const [ngoUpdateMessage, setNgoUpdateMessage] = useState('');
+  const [ngoUpdateImpact, setNgoUpdateImpact] = useState('');
+  const [ngoUpdateLoading, setNgoUpdateLoading] = useState(false);
+  const [ngoUpdateStatus, setNgoUpdateStatus] = useState('');
+  const [ngoUpdateStatusTone, setNgoUpdateStatusTone] = useState('success');
+  const [updateAnalytics, setUpdateAnalytics] = useState(null);
+  const [updateAnalyticsLoading, setUpdateAnalyticsLoading] = useState(false);
+  const [updateAnalyticsError, setUpdateAnalyticsError] = useState('');
 
   const role = getUserRole();
   const isAdmin = role === 'admin';
   const isUser = role === 'user';
+  const isNgo = role === 'ngo';
 
   useEffect(() => {
     api.get(`/campaigns/${id}`)
@@ -82,22 +117,20 @@ export default function CampaignDetails() {
         setLoading(false);
       });
 
-    const token = localStorage.getItem('token');
-    if (token) {
-      try {
-        const decoded = JSON.parse(atob(token.split('.')[1]));
-        setVolunteerForm((prev) => ({
-          ...prev,
-          fullName: prev.fullName || decoded.name || '',
-          email: prev.email || decoded.email || '',
-          phone: prev.phone || decoded.mobileNumber || ''
-        }));
-      } catch (err) {
-        // ignore token parse issues
-      }
+    const tokenPayload = getTokenPayload();
+    if (tokenPayload) {
+      setPrincipalId(String(tokenPayload.id || ''));
+      setVolunteerForm((prev) => ({
+        ...prev,
+        fullName: prev.fullName || tokenPayload.name || '',
+        email: prev.email || tokenPayload.email || '',
+        phone: prev.phone || tokenPayload.mobileNumber || ''
+      }));
+    } else {
+      setPrincipalId('');
     }
 
-    if (token && isUser) {
+    if (tokenPayload && isUser) {
       api.get(`/campaigns/${id}/volunteer/me`)
         .then((registrationRes) => {
           const joined = Boolean(registrationRes.data?.joined);
@@ -161,6 +194,42 @@ export default function CampaignDetails() {
       { label: 'Volunteers Engaged', value: Number(stats.volunteersEngaged || campaign?.volunteers?.length || 0) }
     ];
   }, [campaign]);
+
+  const normalizedUpdates = useMemo(() => {
+    const list = Array.isArray(campaign?.updates) ? campaign.updates : [];
+    return list.map((item, index) => normalizeCampaignUpdateEntry(item, index));
+  }, [campaign]);
+
+  const campaignNgoId = String(campaign?.ngo?.id || campaign?.ngo?._id || campaign?.ngo || '');
+  const canManageUpdates = Boolean(isNgo && principalId && campaignNgoId && campaignNgoId === String(principalId));
+  const hasTestimonials = Array.isArray(campaign?.testimonials) && campaign.testimonials.length > 0;
+  const hasRecognitions = Array.isArray(campaign?.recognitions) && campaign.recognitions.length > 0;
+  const hasUpdates = normalizedUpdates.length > 0;
+
+  const loadUpdateAnalytics = useCallback(async ({ silent = false } = {}) => {
+    if (!canManageUpdates) {
+      setUpdateAnalytics(null);
+      setUpdateAnalyticsError('');
+      setUpdateAnalyticsLoading(false);
+      return;
+    }
+
+    if (!silent) setUpdateAnalyticsLoading(true);
+    setUpdateAnalyticsError('');
+    try {
+      const res = await getCampaignUpdateAnalytics(id);
+      setUpdateAnalytics(res?.data || null);
+    } catch (err) {
+      setUpdateAnalytics(null);
+      setUpdateAnalyticsError(err.response?.data?.message || 'Unable to load update analytics right now.');
+    } finally {
+      setUpdateAnalyticsLoading(false);
+    }
+  }, [canManageUpdates, id]);
+
+  useEffect(() => {
+    loadUpdateAnalytics();
+  }, [loadUpdateAnalytics]);
 
   const openDirections = () => {
     if (!campaignCoordinates) {
@@ -383,7 +452,77 @@ export default function CampaignDetails() {
     setVolunteerLoading(false);
   };
 
+  const handlePostCampaignUpdate = async (e) => {
+    e.preventDefault();
+    if (!canManageUpdates) {
+      setNgoUpdateStatusTone('error');
+      setNgoUpdateStatus('Only the campaign owner can post updates.');
+      return;
+    }
+
+    const headline = String(ngoUpdateHeadline || '').trim();
+    const message = String(ngoUpdateMessage || '').trim();
+    const impactSummary = String(ngoUpdateImpact || '').trim();
+
+    if (message.length < 8) {
+      setNgoUpdateStatusTone('error');
+      setNgoUpdateStatus('Please enter an update message with at least 8 characters.');
+      return;
+    }
+
+    setNgoUpdateLoading(true);
+    setNgoUpdateStatus('');
+
+    try {
+      const res = await postCampaignUpdate(id, {
+        headline,
+        message,
+        impactSummary
+      });
+
+      const saved = normalizeCampaignUpdateEntry(
+        res?.data?.update || {
+          headline: headline || 'Campaign Progress Update',
+          message,
+          impactSummary,
+          createdAt: new Date().toISOString()
+        },
+        0
+      );
+
+      setCampaign((prev) => {
+        if (!prev) return prev;
+        const current = Array.isArray(prev.updates) ? prev.updates : [];
+        return {
+          ...prev,
+          updates: [saved, ...current].slice(0, 80)
+        };
+      });
+
+      const notifiedDonors = Number(res?.data?.notifiedDonors || 0);
+      setNgoUpdateStatusTone('success');
+      setNgoUpdateStatus(
+        notifiedDonors > 0
+          ? `Update posted and ${notifiedDonors} donor${notifiedDonors === 1 ? '' : 's'} notified.`
+          : 'Update posted successfully.'
+      );
+      loadUpdateAnalytics({ silent: true });
+      setNgoUpdateHeadline('');
+      setNgoUpdateMessage('');
+      setNgoUpdateImpact('');
+    } catch (err) {
+      setNgoUpdateStatusTone('error');
+      setNgoUpdateStatus(err.response?.data?.message || 'Failed to post campaign update.');
+    } finally {
+      setNgoUpdateLoading(false);
+    }
+  };
+
   const handleFlagCampaign = async () => {
+    if (isNgo) {
+      setFlagMessage('NGO accounts cannot request admin review.');
+      return;
+    }
     if (!isAdmin && !isUser) {
       setFlagMessage('Please login to submit a request.');
       return;
@@ -523,11 +662,11 @@ export default function CampaignDetails() {
               </div>
             )}
 
-            {(campaign.testimonials?.length > 0 || campaign.recognitions?.length > 0 || campaign.updates?.length > 0) && (
+            {(hasTestimonials || hasRecognitions || hasUpdates || canManageUpdates) && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-white rounded-lg shadow-xl p-8">
                   <h2 className="text-2xl font-bold text-gray-800 mb-4">Testimonials</h2>
-                  {campaign.testimonials?.length ? (
+                  {hasTestimonials ? (
                     <div className="space-y-4">
                       {campaign.testimonials.map((item, index) => (
                         <blockquote key={`${item.name}-${index}`} className="border-l-4 border-indigo-300 pl-4">
@@ -556,9 +695,116 @@ export default function CampaignDetails() {
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Latest Updates</h3>
-                      {campaign.updates?.length ? (
-                        <ul className="text-sm text-gray-700 space-y-2">
-                          {campaign.updates.map((item, index) => <li key={index}>• {item}</li>)}
+                      {canManageUpdates && (
+                        <form onSubmit={handlePostCampaignUpdate} className="mb-4 space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                          <input
+                            type="text"
+                            value={ngoUpdateHeadline}
+                            onChange={(e) => setNgoUpdateHeadline(e.target.value)}
+                            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                            placeholder="Headline (optional)"
+                            maxLength={120}
+                          />
+                          <textarea
+                            value={ngoUpdateMessage}
+                            onChange={(e) => setNgoUpdateMessage(e.target.value)}
+                            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                            placeholder="What progress was made? (required)"
+                            rows={3}
+                            maxLength={1200}
+                          />
+                          <input
+                            type="text"
+                            value={ngoUpdateImpact}
+                            onChange={(e) => setNgoUpdateImpact(e.target.value)}
+                            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                            placeholder="Impact summary (optional, e.g., 120 kits distributed)"
+                            maxLength={180}
+                          />
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs text-gray-500">Publishing sends personalized notifications to completed donors.</p>
+                            <button
+                              type="submit"
+                              disabled={ngoUpdateLoading}
+                              className="rounded bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:bg-indigo-300"
+                            >
+                              {ngoUpdateLoading ? 'Posting...' : 'Post Update'}
+                            </button>
+                          </div>
+                          {ngoUpdateStatus && (
+                            <p className={`text-xs ${
+                              ngoUpdateStatusTone === 'error' ? 'text-red-600' : 'text-emerald-700'
+                            }`}>
+                              {ngoUpdateStatus}
+                            </p>
+                          )}
+                        </form>
+                      )}
+                      {canManageUpdates && (
+                        <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50 p-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-800">Update Delivery Insights</p>
+                            <button
+                              type="button"
+                              onClick={() => loadUpdateAnalytics()}
+                              disabled={updateAnalyticsLoading}
+                              className="text-xs font-semibold text-indigo-700 hover:underline disabled:text-indigo-400"
+                            >
+                              {updateAnalyticsLoading ? 'Refreshing...' : 'Refresh'}
+                            </button>
+                          </div>
+                          {updateAnalyticsError && (
+                            <p className="mt-2 text-xs text-red-600">{updateAnalyticsError}</p>
+                          )}
+                          {updateAnalytics?.totals && (
+                            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-700">
+                              <div className="rounded border border-indigo-100 bg-white p-2">
+                                <p className="text-gray-500">Target Donors</p>
+                                <p className="font-semibold text-gray-900">{Number(updateAnalytics.totals.targetDonors || 0)}</p>
+                              </div>
+                              <div className="rounded border border-indigo-100 bg-white p-2">
+                                <p className="text-gray-500">In-App Delivered</p>
+                                <p className="font-semibold text-gray-900">{Number(updateAnalytics.totals.sentCount || 0)}</p>
+                              </div>
+                              <div className="rounded border border-indigo-100 bg-white p-2">
+                                <p className="text-gray-500">Open Rate</p>
+                                <p className="font-semibold text-gray-900">{Number(updateAnalytics.totals.openRate || 0).toFixed(1)}%</p>
+                              </div>
+                              <div className="rounded border border-indigo-100 bg-white p-2">
+                                <p className="text-gray-500">Click Rate</p>
+                                <p className="font-semibold text-gray-900">{Number(updateAnalytics.totals.clickRate || 0).toFixed(1)}%</p>
+                              </div>
+                              <div className="rounded border border-indigo-100 bg-white p-2 col-span-2">
+                                <p className="text-gray-500">Email Delivery</p>
+                                <p className="font-semibold text-gray-900">
+                                  {Number(updateAnalytics.totals.emailSentCount || 0)} sent / {Number(updateAnalytics.totals.emailAttemptedCount || 0)} attempted
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {hasUpdates ? (
+                        <ul className="text-sm text-gray-700 space-y-3">
+                          {normalizedUpdates.map((item) => (
+                            <li key={item.id} className="rounded border border-gray-200 p-3">
+                              <p className="font-semibold text-gray-800">{item.headline || 'Campaign Update'}</p>
+                              <p className="mt-1 whitespace-pre-wrap">{item.message || 'No message provided.'}</p>
+                              {canManageUpdates && item.delivery && (
+                                <p className="mt-1 text-xs text-indigo-700">
+                                  Delivery: {Number(item.delivery.inAppDelivered || 0)} in-app, {Number(item.delivery.emailSent || 0)} email sent
+                                </p>
+                              )}
+                              {item.impactSummary && (
+                                <p className="mt-1 text-xs text-emerald-700">Impact: {item.impactSummary}</p>
+                              )}
+                              {item.createdAt && (
+                                <p className="mt-1 text-xs text-gray-500">
+                                  {new Date(item.createdAt).toLocaleString()}
+                                </p>
+                              )}
+                            </li>
+                          ))}
                         </ul>
                       ) : (
                         <p className="text-sm text-gray-500">No updates listed.</p>
@@ -750,21 +996,36 @@ export default function CampaignDetails() {
                 <h2 className="text-2xl font-bold text-gray-800">Report Campaign</h2>
                 {campaign.flagged && <span className="text-sm text-red-600 font-semibold">Flagged</span>}
               </div>
+              {isNgo && (
+                <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                  NGO accounts cannot submit admin review requests.
+                </div>
+              )}
               <textarea
                 value={flagReason}
                 onChange={(e) => setFlagReason(e.target.value)}
                 placeholder="Reason for reporting (optional)"
                 className="w-full border border-gray-300 rounded-md p-2 mb-3"
                 rows={3}
-                disabled={campaign.flagged}
+                disabled={campaign.flagged || isNgo}
               />
               <button
                 type="button"
                 onClick={() => setFlagModalOpen(true)}
-                disabled={flagLoading || campaign.flagged}
+                disabled={flagLoading || campaign.flagged || isNgo}
                 className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-red-300"
               >
-                {campaign.flagged ? 'Already Flagged' : flagLoading ? 'Submitting...' : isAdmin ? 'Flag Campaign' : 'Request Admin Review'}
+                {campaign.flagged
+                  ? 'Already Flagged'
+                  : flagLoading
+                    ? 'Submitting...'
+                    : isAdmin
+                      ? 'Flag Campaign'
+                      : isUser
+                        ? 'Request Admin Review'
+                        : isNgo
+                          ? 'Unavailable for NGO accounts'
+                          : 'Login to Request Review'}
               </button>
             </div>
 
@@ -919,13 +1180,15 @@ export default function CampaignDetails() {
 
       <ConfirmModal
         open={flagModalOpen}
-        title={isAdmin ? 'Flag Campaign' : 'Request Admin Review'}
+        title={isAdmin ? 'Flag Campaign' : isUser ? 'Request Admin Review' : 'Report Campaign'}
         description={
           isAdmin
             ? 'This will mark the campaign as flagged and visible to admins.'
-            : 'Your request will be sent to the admin team for review.'
+            : isUser
+              ? 'Your request will be sent to the admin team for review.'
+              : 'Only user accounts can request admin review.'
         }
-        confirmLabel={isAdmin ? 'Flag Campaign' : 'Send Request'}
+        confirmLabel={isAdmin ? 'Flag Campaign' : isUser ? 'Send Request' : 'Submit'}
         onConfirm={handleFlagCampaign}
         onCancel={() => setFlagModalOpen(false)}
         loading={flagLoading}
