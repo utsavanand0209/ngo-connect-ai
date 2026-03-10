@@ -8,6 +8,8 @@
     "dev": "nodemon src/server.js",
     "seed": "node seed.js",
     "smoke": "node scripts/smokeTest.js",
+    "scenario:flood": "node scripts/floodDataAndFeatureTest.js",
+    "scenario:roles": "node scripts/roleWorkflowScenario.js",
     "smoke:webhook": "node scripts/webhookSmokeTest.js",
     "smoke:webhook:worker": "node scripts/webhookAutoRetrySmokeTest.js",
     "webhook:worker:tick": "node scripts/webhookWorkerTick.js",

@@ -1,0 +1,80 @@
+{
+  "runId": "20260309120955",
+  "timestamp": "2026-03-09T12:09:55.832Z",
+  "apiBase": "http://localhost:5001/api",
+  "createdNgos": [
+    {
+      "id": "f52f0cbe-1d6e-4046-bc04-6f20d729e79a",
+      "name": "Scenario NGO 1 20260309120955",
+      "email": "scenario.ngo.202603091209551@example.com"
+    },
+    {
+      "id": "690b7c98-1793-4cee-a26d-713b835c9bef",
+      "name": "Scenario NGO 2 20260309120955",
+      "email": "scenario.ngo.202603091209552@example.com"
+    },
+    {
+      "id": "67f22711-cd72-4e6e-bfdb-29a4e9d7ef01",
+      "name": "Scenario NGO 3 20260309120955",
+      "email": "scenario.ngo.202603091209553@example.com"
+    }
+  ],
+  "verification": {
+    "pendingBefore": 4,
+    "pendingAfter": 1,
+    "createdNgosFoundInPendingBefore": [
+      "f52f0cbe-1d6e-4046-bc04-6f20d729e79a",
+      "690b7c98-1793-4cee-a26d-713b835c9bef",
+      "67f22711-cd72-4e6e-bfdb-29a4e9d7ef01"
+    ],
+    "createdNgosFoundInPendingAfter": [],
+    "verifiedIds": [
+      "f52f0cbe-1d6e-4046-bc04-6f20d729e79a",
+      "690b7c98-1793-4cee-a26d-713b835c9bef"
+    ],
+    "rejectedIds": [
+      "67f22711-cd72-4e6e-bfdb-29a4e9d7ef01"
+    ]
+  },
+  "flagging": {
+    "submitted": [
+      {
+        "targetType": "ngo",
+        "targetId": "f52f0cbe-1d6e-4046-bc04-6f20d729e79a",
+        "targetName": "Scenario NGO 1 20260309120955",
+        "requestId": "aae18662-0c01-4f21-b76c-b9d90c168c0d"
+      },
+      {
+        "targetType": "ngo",
+        "targetId": "690b7c98-1793-4cee-a26d-713b835c9bef",
+        "targetName": "Scenario NGO 2 20260309120955",
+        "requestId": "35efc1df-abb4-48a0-888b-e16f323bba2e"
+      },
+      {
+        "targetType": "campaign",
+        "targetId": "fda93249-2fd3-4d84-8998-84a14374901d",
+        "targetName": "Community Kitchen Volunteers - Bengaluru West",
+        "requestId": "bcd4cb0b-0365-4cd0-8e4f-4eb0bba86a4b"
+      }
+    ],
+    "resolved": [
+      {
+        "requestId": "bcd4cb0b-0365-4cd0-8e4f-4eb0bba86a4b",
+        "action": "approve",
+        "finalStatus": "approved"
+      },
+      {
+        "requestId": "35efc1df-abb4-48a0-888b-e16f323bba2e",
+        "action": "approve",
+        "finalStatus": "approved"
+      },
+      {
+        "requestId": "aae18662-0c01-4f21-b76c-b9d90c168c0d",
+        "action": "reject",
+        "finalStatus": "rejected"
+      }
+    ],
+    "flaggedNgoCount": 5,
+    "flaggedCampaignCount": 4
+  }
+}

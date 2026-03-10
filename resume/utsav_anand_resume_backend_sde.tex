@@ -1,0 +1,84 @@
+\documentclass[10pt]{article}
+
+\usepackage[a4paper,margin=0.58in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+\usepackage{titlesec}
+
+\pagenumbering{gobble}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+\setlist[itemize]{leftmargin=*,topsep=1pt,itemsep=0pt,parsep=0pt}
+\titleformat{\section}{\normalsize\bfseries}{}{0pt}{}[\titlerule]
+\titlespacing*{\section}{0pt}{5pt}{2pt}
+
+\newcommand{\resheading}[1]{\section*{#1}}
+\newcommand{\resitem}[1]{\item #1}
+\newcommand{\resproject}[3]{\textbf{#1} \hfill #2\\\textit{#3}}
+
+\begin{document}
+
+\begin{center}
+    {\LARGE \textbf{Utsav Anand}}\\[3pt]
+    Bengaluru, India \,|\, +91-7091868566 \,|\, \href{mailto:utsavanand0209@gmail.com}{utsavanand0209@gmail.com}\\[1pt]
+    \href{https://github.com/utsavanand0209}{github.com/utsavanand0209} \,|\, \href{https://www.linkedin.com/in/utsav02/}{linkedin.com/in/utsav02}
+\end{center}
+
+\resheading{Professional Summary}
+Entry-level Backend Software Engineer with hands-on experience building RESTful services, microservices-aligned backend modules, SQL-backed data models, and CI/CD-ready delivery workflows using Java and Node.js. Strong foundation in DSA, OOP, debugging, and API reliability.
+
+\resheading{Technical Skills}
+\textbf{Core Backend:} Java, Node.js, Python, SQL, RESTful services, Microservices architecture\\
+\textbf{Frameworks and APIs:} Express.js, Flask, JWT auth, API integration, Webhooks\\
+\textbf{Databases and Cloud:} PostgreSQL, MongoDB, SQLite, AWS fundamentals\\
+\textbf{Dev Tools:} Git, GitHub, Linux, Docker, CI/CD pipelines, Unit testing\\
+\textbf{CS Fundamentals:} Data Structures and Algorithms, OOP, DBMS, Operating Systems, Computer Networks
+
+\resheading{Internship Experience}
+\textbf{Android Development Intern, Skillbit Technologies} \hfill Jun 2025 -- Jul 2025
+\begin{itemize}
+    \resitem{Supported backend API integration with Android modules and collaborated with senior engineers to resolve 15+ defects, improving stability and release confidence.}
+\end{itemize}
+
+\textbf{Web Developer Intern, CodSoft} \hfill Jul 2024 -- Aug 2024
+\begin{itemize}
+    \resitem{Built 3 responsive web applications, integrated third-party APIs, and improved frontend performance by approximately 20\% through optimization.}
+\end{itemize}
+
+\resheading{Projects}
+\resproject{NGO-Connect AI (Backend-Heavy Full-Stack Platform)}{2025 -- 2026}{Node.js, Express, PostgreSQL, React, JWT, Gemini API}
+\begin{itemize}
+    \resitem{Engineered backend services with 149 RESTful endpoints across auth, campaigns, donations, volunteering, messaging, admin, and innovation modules with role-based authorization.}
+    \resitem{Implemented 8 AI endpoints for recommendations, campaign classification, proposal drafting, fraud scoring, forecasting, support chat, and volunteer matching, improving platform engagement through personalized workflows.}
+    \resitem{Designed a normalized PostgreSQL model with 35 tables and built webhook reliability features (dead-letter queue, replay worker, metrics/export, cleanup), validated via a 35-step smoke suite (21.69 ms avg, 72 ms p90).}
+\end{itemize}
+
+\resproject{Internship Yuva - Advanced Subscription Manager (GitHub)}{2026}{Python, Flask, SQLite, pytest}
+\begin{itemize}
+    \resitem{Developed backend modules for authentication, per-user CRUD, analytics API, CSV export, and rule-based filtering for subscription tracking workflows.}
+    \resitem{Implemented 9 routes and 7 automated tests; executed a 900-request benchmark at concurrency 20 with 15.83 requests/second and 0\% error responses.}
+\end{itemize}
+
+\resproject{Backend Financial Workflow System}{2025}{Java, SQL, REST APIs, Git}
+\begin{itemize}
+    \resitem{Built Java backend modules and RESTful services for transactional financial workflows with modular, microservices-friendly design practices.}
+    \resitem{Contributed to debugging, unit testing, code reviews, and CI pipeline workflows to improve production readiness and secure coding quality.}
+\end{itemize}
+
+\resheading{Education}
+\textbf{B.Tech in Computer Science and Engineering, CMR University, Bengaluru} \hfill 2026\\
+CGPA: 7.81/10\\
+\textbf{Higher Secondary Education, Kamla High School} \hfill 2020\\
+Percentage: 71.20\%
+
+\resheading{Certifications and Achievements}
+\begin{itemize}
+    \resitem{NCAT Exam (Naukri, 2025) -- All India Rank 6423}
+    \resitem{Web Development Projects Certification -- CodSoft}
+    \resitem{JITHACK'24 Hackathon -- Travel Booking Website Project}
+\end{itemize}
+
+\end{document}

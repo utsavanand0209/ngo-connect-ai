@@ -1,0 +1,166 @@
+{
+  "project": "NGO Connect",
+  "version": 1,
+  "scenes": [
+    {
+      "slug": "home_intro",
+      "title": "Home And Platform Intro",
+      "route": "/",
+      "role": "public",
+      "settle_seconds": 2.0,
+      "hold_after_seconds": 1.0,
+      "action": "Scroll slowly through hero and headline sections.",
+      "narration": "Welcome to NGO Connect. This platform connects donors, volunteers, NGOs, and admins in one transparent social impact ecosystem."
+    },
+    {
+      "slug": "user_login",
+      "title": "User Login",
+      "route": "/login",
+      "role": "user",
+      "settle_seconds": 1.5,
+      "hold_after_seconds": 1.0,
+      "action": "Login with rahul@example.com and password123.",
+      "narration": "First, we enter as a user. Users can discover trusted NGOs, donate securely, volunteer in campaigns, and track their impact in one place."
+    },
+    {
+      "slug": "discover_ngos",
+      "title": "Discover NGOs",
+      "route": "/discover",
+      "role": "user",
+      "settle_seconds": 1.2,
+      "hold_after_seconds": 1.0,
+      "action": "Use search and category filters, then open one NGO card.",
+      "narration": "The discovery module helps users filter NGOs by cause, location, and relevance so support decisions are faster and better informed."
+    },
+    {
+      "slug": "ngo_map",
+      "title": "Map View",
+      "route": "/map",
+      "role": "user",
+      "settle_seconds": 1.2,
+      "hold_after_seconds": 1.0,
+      "action": "Pan map and show directions option.",
+      "narration": "The map view adds geographic context, allowing users to explore nearby NGOs and plan location-aware support and volunteering."
+    },
+    {
+      "slug": "campaign_listing",
+      "title": "Campaign Listing",
+      "route": "/campaigns",
+      "role": "user",
+      "settle_seconds": 1.2,
+      "hold_after_seconds": 1.0,
+      "action": "Open a campaign and show progress area.",
+      "narration": "Campaign pages show goals, current progress, beneficiary outcomes, and updates, helping users evaluate where contributions create the most impact."
+    },
+    {
+      "slug": "donate_flow",
+      "title": "Donation Flow",
+      "route": "/donate",
+      "role": "user",
+      "settle_seconds": 1.2,
+      "hold_after_seconds": 1.0,
+      "action": "Show payment method options and amount entry.",
+      "narration": "The donation flow supports UPI, card, and netbanking through a structured initiate and confirm workflow designed for reliability and traceability."
+    },
+    {
+      "slug": "volunteer_flow",
+      "title": "Volunteer Opportunities",
+      "route": "/volunteer-opportunities",
+      "role": "user",
+      "settle_seconds": 1.2,
+      "hold_after_seconds": 1.0,
+      "action": "Open one opportunity and show apply section.",
+      "narration": "Users can browse volunteer opportunities, apply directly, and contribute through skills, time, and on-ground support, not only donations."
+    },
+    {
+      "slug": "user_dashboard_profile",
+      "title": "User Dashboard And Profile",
+      "route": "/dashboard",
+      "role": "user",
+      "settle_seconds": 1.2,
+      "hold_after_seconds": 1.0,
+      "action": "Show dashboard stats, then move to /profile.",
+      "narration": "Dashboards and profiles summarize each user journey, including donation records, volunteer activity, certificates, and overall contribution tracking."
+    },
+    {
+      "slug": "engagement_modules",
+      "title": "Messages Insights Recommendations",
+      "route": "/messages",
+      "role": "user",
+      "settle_seconds": 1.2,
+      "hold_after_seconds": 1.0,
+      "action": "Switch quickly through /messages, /insights, /recommendations, and /chatbot.",
+      "narration": "Engagement features include direct messaging, smart insights, personalized recommendations, and an AI chatbot to guide users across platform workflows."
+    },
+    {
+      "slug": "innovation_center",
+      "title": "Innovation Center",
+      "route": "/innovation-center",
+      "role": "user",
+      "settle_seconds": 1.2,
+      "hold_after_seconds": 1.0,
+      "action": "Scroll through emergency feed, giving circles, wishlist, leaderboard, and endorsements.",
+      "narration": "Innovation Center expands participation through emergency response feeds, giving circles, in-kind wishlists, gamification, endorsements, and corporate matching workflows."
+    },
+    {
+      "slug": "ngo_login",
+      "title": "Switch To NGO Role",
+      "route": "/login",
+      "role": "ngo",
+      "settle_seconds": 1.5,
+      "hold_after_seconds": 1.0,
+      "action": "Login with akshayapatra@ngo.org and password123.",
+      "narration": "Now we switch to the NGO role to see how organizations run campaigns, operations, supporter engagement, and internal coordination."
+    },
+    {
+      "slug": "ngo_operations",
+      "title": "NGO Operations",
+      "route": "/ngo/profile",
+      "role": "ngo",
+      "settle_seconds": 1.2,
+      "hold_after_seconds": 1.0,
+      "action": "Show NGO profile management, then open /campaigns/create and one existing campaign.",
+      "narration": "NGOs can manage profile data, publish campaigns, review volunteering and donation activity, and maintain execution quality through structured workflows."
+    },
+    {
+      "slug": "ngo_updates_analytics",
+      "title": "Campaign Updates And Analytics",
+      "route": "/campaigns",
+      "role": "ngo",
+      "settle_seconds": 1.2,
+      "hold_after_seconds": 1.0,
+      "action": "Open a campaign and show update posting or campaign analytics panels.",
+      "narration": "Campaign update tools help NGOs publish delivery milestones and track supporter engagement, improving transparency and long-term donor trust."
+    },
+    {
+      "slug": "admin_login",
+      "title": "Switch To Admin Role",
+      "route": "/login",
+      "role": "admin",
+      "settle_seconds": 1.5,
+      "hold_after_seconds": 1.0,
+      "action": "Login with admin@ngoconnect.org and password123.",
+      "narration": "Now we move to admin controls where governance, moderation, and platform-level reliability are managed centrally."
+    },
+    {
+      "slug": "admin_governance",
+      "title": "Admin Governance",
+      "route": "/admin",
+      "role": "admin",
+      "settle_seconds": 1.2,
+      "hold_after_seconds": 1.0,
+      "action": "Navigate through /admin/verifications, /admin/flagged-content, /admin/analytics, /admin/requests, /admin/notifications, /admin/categories, /admin/users.",
+      "narration": "Admins verify NGOs, moderate flagged content, monitor analytics, manage requests, and maintain healthy platform operations across all stakeholder groups."
+    },
+    {
+      "slug": "webhooks_reliability",
+      "title": "Reliability And Architecture Close",
+      "route": "/admin",
+      "role": "admin",
+      "settle_seconds": 1.2,
+      "hold_after_seconds": 1.0,
+      "action": "Show admin dashboard metrics and close on home page.",
+      "narration": "Behind the interface, NGO Connect runs on a React frontend, Express API, and PostgreSQL data model with webhook reliability, replay operations, and measurable delivery observability."
+    }
+  ]
+}

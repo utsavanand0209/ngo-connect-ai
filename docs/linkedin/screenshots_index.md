@@ -1,0 +1,87 @@
+# LinkedIn Screenshot Index
+
+## Frontend Pages
+
+- 01_home | Home | / | OK
+  - [01_home.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/01_home.png)
+- 02_login | Login | /login | OK
+  - [02_login.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/02_login.png)
+- 03_register | Register | /register | OK
+  - [03_register.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/03_register.png)
+- 04_ngos | NGO List | /ngos | OK
+  - [04_ngos.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/04_ngos.png)
+- 05_ngo_profile | NGO Profile | /ngos/86f54094-a15a-4aad-9a05-3c59ae4b3c68 | OK
+  - [05_ngo_profile.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/05_ngo_profile.png)
+- 06_ngo_detail_demo | NGO Detail Demo | /ngo-detail | OK
+  - [06_ngo_detail_demo.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/06_ngo_detail_demo.png)
+- 07_user_discover | Discover NGOs | /discover | OK
+  - [07_user_discover.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/07_user_discover.png)
+- 08_user_map | Map | /map | OK
+  - [08_user_map.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/08_user_map.png)
+- 09_user_volunteer_campaigns | Volunteer Campaigns | /volunteer-campaigns | OK
+  - [09_user_volunteer_campaigns.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/09_user_volunteer_campaigns.png)
+- 10_user_volunteer_opportunities | Volunteer Opportunities | /volunteer-opportunities | OK
+  - [10_user_volunteer_opportunities.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/10_user_volunteer_opportunities.png)
+- 11_user_donate | Donate | /donate | OK
+  - [11_user_donate.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/11_user_donate.png)
+- 12_user_insights | Insights | /insights | OK
+  - [12_user_insights.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/12_user_insights.png)
+- 13_user_dashboard | User Dashboard | /dashboard | OK
+  - [13_user_dashboard.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/13_user_dashboard.png)
+- 14_user_profile | User Profile | /profile | OK
+  - [14_user_profile.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/14_user_profile.png)
+- 15_user_campaigns | Campaign List | /campaigns | OK
+  - [15_user_campaigns.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/15_user_campaigns.png)
+- 16_user_campaign_detail | Campaign Detail | /campaigns/039466f3-8909-444e-82e6-2a0c35aae228 | OK
+  - [16_user_campaign_detail.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/16_user_campaign_detail.png)
+- 17_user_messages | Messages | /messages | OK
+  - [17_user_messages.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/17_user_messages.png)
+- 18_user_innovation | Innovation Center (User) | /innovation-center | OK
+  - [18_user_innovation.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/18_user_innovation.png)
+- 19_user_chatbot | Chatbot | /chatbot | OK
+  - [19_user_chatbot.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/19_user_chatbot.png)
+- 20_user_recommendations | Recommendations | /recommendations | OK
+  - [20_user_recommendations.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/20_user_recommendations.png)
+- 21_user_volunteer_redirect | Volunteer Redirect Route | /volunteer | OK
+  - [21_user_volunteer_redirect.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/21_user_volunteer_redirect.png)
+- 22_ngo_dashboard | NGO Dashboard | /dashboard | OK
+  - [22_ngo_dashboard.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/22_ngo_dashboard.png)
+- 23_ngo_profile_update | NGO Profile Update | /ngo/profile | OK
+  - [23_ngo_profile_update.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/23_ngo_profile_update.png)
+- 24_ngo_campaign_create | Create Campaign | /campaigns/create | OK
+  - [24_ngo_campaign_create.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/24_ngo_campaign_create.png)
+- 25_ngo_messages | Messages (NGO) | /messages | OK
+  - [25_ngo_messages.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/25_ngo_messages.png)
+- 26_ngo_innovation | Innovation Center (NGO) | /innovation-center | OK
+  - [26_ngo_innovation.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/26_ngo_innovation.png)
+- 27_ngo_campaigns | Campaigns (NGO) | /campaigns | OK
+  - [27_ngo_campaigns.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/27_ngo_campaigns.png)
+- 28_admin_dashboard | Admin Dashboard | /admin | OK
+  - [28_admin_dashboard.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/28_admin_dashboard.png)
+- 29_admin_verifications | Admin Verifications | /admin/verifications | OK
+  - [29_admin_verifications.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/29_admin_verifications.png)
+- 30_admin_flagged_content | Flagged Content | /admin/flagged-content | OK
+  - [30_admin_flagged_content.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/30_admin_flagged_content.png)
+- 31_admin_users | Admin Users | /admin/users | OK
+  - [31_admin_users.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/31_admin_users.png)
+- 32_admin_analytics | Admin Analytics | /admin/analytics | OK
+  - [32_admin_analytics.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/32_admin_analytics.png)
+- 33_admin_notifications | Admin Notifications | /admin/notifications | OK
+  - [33_admin_notifications.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/33_admin_notifications.png)
+- 34_admin_requests | Admin Requests | /admin/requests | OK
+  - [34_admin_requests.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/34_admin_requests.png)
+- 35_admin_categories | Admin Categories | /admin/categories | OK
+  - [35_admin_categories.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/pages/35_admin_categories.png)
+
+## Code Screenshots
+
+- code_01_app_js | Frontend Routing | assets/linkedin/screenshots/code/code_01_app_js.png
+  - [code_01_app_js.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/code/code_01_app_js.png)
+- code_02_admin_analytics_js | Admin Analytics Page | assets/linkedin/screenshots/code/code_02_admin_analytics_js.png
+  - [code_02_admin_analytics_js.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/code/code_02_admin_analytics_js.png)
+- code_03_innovation_center_js | Innovation Center Logic | assets/linkedin/screenshots/code/code_03_innovation_center_js.png
+  - [code_03_innovation_center_js.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/code/code_03_innovation_center_js.png)
+- code_04_api_js | API Service Layer | assets/linkedin/screenshots/code/code_04_api_js.png
+  - [code_04_api_js.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/code/code_04_api_js.png)
+- code_05_backend_server_js | Backend Server Setup | assets/linkedin/screenshots/code/code_05_backend_server_js.png
+  - [code_05_backend_server_js.png](//Users/utsavanand/Ngo-Connect/assets/linkedin/screenshots/code/code_05_backend_server_js.png)

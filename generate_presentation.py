@@ -4,6 +4,8 @@ NGO-Connect: Stakeholder Presentation Generator
 Generates a polished PowerPoint presentation from project facts.
 """
 
+from pathlib import Path
+
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
@@ -858,7 +860,8 @@ add_text_box(sl, Inches(1), Inches(5.0), Inches(11), Inches(1),
 # ═══════════════════════════════════════════════════════════════
 # SAVE
 # ═══════════════════════════════════════════════════════════════
-output_path = "./NGO_Connect_Architecture_Presentation.pptx"
-prs.save(output_path)
+output_path = Path("docs/organized/documents/NGO_Connect_Architecture_Presentation.pptx")
+output_path.parent.mkdir(parents=True, exist_ok=True)
+prs.save(str(output_path))
 print(f"✅ Presentation saved to: {output_path}")
 print(f"   Slides: {len(prs.slides)}")

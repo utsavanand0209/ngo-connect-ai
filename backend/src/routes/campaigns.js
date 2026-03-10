@@ -147,10 +147,23 @@ const emptyUpdateTotals = () => ({
   emailDeliveryRate: 0
 });
 
-const normalizeCampaignUpdateEntry = (entry = {}) => {
+const buildLegacyUpdateId = (entry, index = 0) => {
+  const safeIndex = Number.isFinite(Number(index)) ? Number(index) + 1 : 1;
+  const raw =
+    typeof entry === 'string'
+      ? entry
+      : (entry && typeof entry === 'object' ? JSON.stringify(entry) : '');
+  const compact = String(raw || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+    .slice(0, 24);
+  return `legacy_update_${safeIndex}_${compact || 'item'}`;
+};
+
+const normalizeCampaignUpdateEntry = (entry = {}, index = 0) => {
   if (typeof entry === 'string') {
     return {
-      id: '',
+      id: buildLegacyUpdateId(entry, index),
       headline: 'Campaign Update',
       message: entry,
       impactSummary: '',
@@ -160,7 +173,7 @@ const normalizeCampaignUpdateEntry = (entry = {}) => {
   }
   const obj = entry && typeof entry === 'object' ? entry : {};
   return {
-    id: obj.id || '',
+    id: String(obj.id || '').trim() || buildLegacyUpdateId(obj, index),
     headline: String(obj.headline || obj.title || 'Campaign Update').trim(),
     message: String(obj.message || obj.text || '').trim(),
     impactSummary: String(obj.impactSummary || '').trim(),

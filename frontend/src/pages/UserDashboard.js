@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   CartesianGrid,
@@ -87,6 +87,7 @@ export default function UserDashboard() {
 
   const [notifications, setNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const trackedOpenNotificationIdsRef = useRef(new Set());
 
   const [helpRequests, setHelpRequests] = useState([]);
   const [helpForm, setHelpForm] = useState({
@@ -221,6 +222,43 @@ export default function UserDashboard() {
     loadContributionHistory();
   }, [loadContributionHistory]);
 
+  useEffect(() => {
+    if (!Array.isArray(notifications) || notifications.length === 0) return;
+
+    const eligible = notifications.filter((note) => {
+      const id = String(note?.id || '').trim();
+      if (!id) return false;
+      if (String(note?.notificationType || '').trim() !== 'campaign_update') return false;
+      if (note?.openedAt) return false;
+      return !trackedOpenNotificationIdsRef.current.has(id);
+    });
+
+    if (eligible.length === 0) return;
+
+    eligible.forEach((note) => {
+      const notificationId = String(note.id || '').trim();
+      if (!notificationId) return;
+      trackedOpenNotificationIdsRef.current.add(notificationId);
+
+      trackNotificationEngagement(notificationId, { action: 'open' })
+        .then((res) => {
+          setNotifications((prev) =>
+            (prev || []).map((entry) => {
+              if (String(entry?.id || '') !== notificationId) return entry;
+              return {
+                ...entry,
+                openedAt: res?.data?.openedAt || entry?.openedAt || new Date().toISOString(),
+                openCount: Number(res?.data?.openCount ?? Number(entry?.openCount || 0) + 1)
+              };
+            })
+          );
+        })
+        .catch(() => {
+          trackedOpenNotificationIdsRef.current.delete(notificationId);
+        });
+    });
+  }, [notifications]);
+
   const submitHelpRequest = async (e) => {
     e.preventDefault();
     if (!helpForm.ngoId || !helpForm.helpType) {
@@ -257,9 +295,24 @@ export default function UserDashboard() {
 
   const handleNotificationClick = (notificationId) => {
     if (!notificationId) return;
-    trackNotificationEngagement(notificationId, { action: 'click' }).catch(() => {
-      // Non-blocking analytics event
-    });
+    trackNotificationEngagement(notificationId, { action: 'click' })
+      .then((res) => {
+        setNotifications((prev) =>
+          (prev || []).map((entry) => {
+            if (String(entry?.id || '') !== String(notificationId)) return entry;
+            return {
+              ...entry,
+              openedAt: res?.data?.openedAt || entry?.openedAt || new Date().toISOString(),
+              clickedAt: res?.data?.clickedAt || entry?.clickedAt || new Date().toISOString(),
+              openCount: Number(res?.data?.openCount ?? Number(entry?.openCount || 0) + 1),
+              clickCount: Number(res?.data?.clickCount ?? Number(entry?.clickCount || 0) + 1)
+            };
+          })
+        );
+      })
+      .catch(() => {
+        // Non-blocking analytics event
+      });
   };
 
   const handleGetRecommendations = () => {

@@ -15,3 +15,10 @@ frontend/.env.*
 # OS / tooling
 .DS_Store
 *.log
+
+# Python cache / temp artifacts
+__pycache__/
+*.py[cod]
+
+# Office lock files
+~$*.pptx

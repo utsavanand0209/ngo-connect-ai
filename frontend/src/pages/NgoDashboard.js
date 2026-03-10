@@ -68,6 +68,60 @@ const toSupportRequestStatusLabel = (status) => {
   return key || 'Pending';
 };
 
+const normalizeRoleText = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const inferRoleBucket = (value) => {
+  const text = normalizeRoleText(value);
+  if (!text) return '';
+  if (/(leadership|governance|director|founder|trustee|chief|executive)/.test(text)) return 'leadership';
+  if (/(volunteer|community outreach|mobilization)/.test(text)) return 'volunteer';
+  if (/(field|operations|implementation|on ground|coordinator)/.test(text)) return 'field';
+  if (/(program|monitoring|evaluation|milestone|delivery|manager)/.test(text)) return 'program';
+  if (/(partnership|fundraising|donor|csr|liaison)/.test(text)) return 'partnerships';
+  if (/(finance|compliance|audit|budget|account)/.test(text)) return 'finance';
+  return '';
+};
+
+const roleTokens = (value) => {
+  const stem = (word) => {
+    let out = String(word || '').toLowerCase().trim();
+    if (!out) return '';
+    out = out.replace(/(ments|ment|ions|ion|ers|er|ors|or|ing|ed|s)$/g, '');
+    return out;
+  };
+
+  return normalizeRoleText(value)
+    .split(' ')
+    .map((token) => stem(token))
+    .filter(Boolean);
+};
+
+const roleMatchesSelected = (selectedRole, memberRole, memberContribution = '') => {
+  const selectedNorm = normalizeRoleText(selectedRole);
+  const memberNorm = normalizeRoleText(memberRole);
+  if (!selectedNorm || !memberNorm) return false;
+  if (selectedNorm === memberNorm) return true;
+  if (selectedNorm.includes(memberNorm) || memberNorm.includes(selectedNorm)) return true;
+
+  const selectedBucket = inferRoleBucket(selectedRole);
+  const memberBucket = inferRoleBucket(`${memberRole} ${memberContribution}`);
+  if (selectedBucket && memberBucket && selectedBucket === memberBucket) return true;
+
+  const selectedWords = new Set(roleTokens(selectedRole));
+  const memberWords = new Set(roleTokens(`${memberRole} ${memberContribution}`));
+  let overlap = 0;
+  selectedWords.forEach((word) => {
+    if (memberWords.has(word)) overlap += 1;
+  });
+  return overlap >= 1;
+};
+
 export default function NgoDashboard() {
   const [loading, setLoading] = useState(true);
   const [ngo, setNgo] = useState(null);
@@ -118,6 +172,8 @@ export default function NgoDashboard() {
   const [selectedHelpRequest, setSelectedHelpRequest] = useState(null);
   const [teamListOpen, setTeamListOpen] = useState(false);
   const [memberQuery, setMemberQuery] = useState('');
+  const [teamInsightView, setTeamInsightView] = useState('members');
+  const [selectedTeamRole, setSelectedTeamRole] = useState('');
 
   const volunteerSignupTotal = useMemo(
     () => Number(volunteerSummary.totalRequests || 0) + Number(campaignVolunteerSummary.totalVolunteers || 0),
@@ -156,6 +212,20 @@ export default function NgoDashboard() {
 
     return summary;
   }, [helpRequests]);
+
+  const hasCampaignUpdatesWithoutRecipients = useMemo(() => {
+    const totals = campaignUpdateAnalytics?.totals || {};
+    const updatesCount = Number(totals.updatesCount || 0);
+    const targetDonors = Number(totals.targetDonors || 0);
+    return updatesCount > 0 && targetDonors === 0;
+  }, [campaignUpdateAnalytics]);
+
+  const hasEmailDeliveryFailures = useMemo(() => {
+    const totals = campaignUpdateAnalytics?.totals || {};
+    const attempts = Number(totals.emailAttemptedCount || 0);
+    const sent = Number(totals.emailSentCount || 0);
+    return attempts > 0 && sent === 0;
+  }, [campaignUpdateAnalytics]);
 
   const campaignNameById = useMemo(() => {
     const map = new Map();
@@ -283,15 +353,65 @@ export default function NgoDashboard() {
     return seen.size;
   }, [memberRows]);
 
-  const memberOfMonthCount = useMemo(() => {
+  const memberOfMonthRows = useMemo(() => {
     const explicit = memberRows.filter((member) =>
       member.badges.some((badge) => /member of the month/i.test(String(badge || '')))
-    ).length;
-    if (explicit > 0) return explicit;
+    );
+    if (explicit.length > 0) return explicit;
 
     const maxTasksCompleted = memberRows.reduce((max, member) => Math.max(max, Number(member.tasksCompleted || 0)), 0);
-    if (maxTasksCompleted <= 0) return 0;
-    return memberRows.filter((member) => Number(member.tasksCompleted || 0) === maxTasksCompleted).length;
+    if (maxTasksCompleted <= 0) return [];
+    return memberRows.filter((member) => Number(member.tasksCompleted || 0) === maxTasksCompleted);
+  }, [memberRows]);
+
+  const memberOfMonthCount = memberOfMonthRows.length;
+
+  const teamStrengthMaxCount = useMemo(
+    () => teamStrengthRows.reduce((max, row) => Math.max(max, Number(row.count || 0)), 0),
+    [teamStrengthRows]
+  );
+
+  const campaignCoverageRows = useMemo(() => {
+    const grouped = new Map();
+
+    memberRows.forEach((member) => {
+      member.campaignAssignments.forEach((assignment) => {
+        const campaignId = String(assignment.campaignId || '').trim();
+        const campaignTitle = String(assignment.campaignTitle || '').trim();
+        const key = campaignId || campaignTitle;
+        if (!key) return;
+
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            key,
+            campaignId,
+            campaignTitle: campaignTitle || 'Campaign',
+            memberIds: new Set(),
+            memberNames: new Set(),
+            tasks: new Set(),
+            assignmentsCount: 0
+          });
+        }
+
+        const row = grouped.get(key);
+        row.assignmentsCount += 1;
+        row.memberIds.add(member.id);
+        row.memberNames.add(member.name);
+        if (assignment.task) row.tasks.add(assignment.task);
+      });
+    });
+
+    return Array.from(grouped.values())
+      .map((row) => ({
+        key: row.key,
+        campaignId: row.campaignId,
+        campaignTitle: row.campaignTitle,
+        assignmentsCount: row.assignmentsCount,
+        memberIds: Array.from(row.memberIds),
+        memberNames: Array.from(row.memberNames),
+        tasks: Array.from(row.tasks)
+      }))
+      .sort((a, b) => b.memberIds.length - a.memberIds.length || b.assignmentsCount - a.assignmentsCount);
   }, [memberRows]);
 
   const filteredMemberRows = useMemo(() => {
@@ -302,6 +422,7 @@ export default function NgoDashboard() {
         .map((assignment) => [assignment.campaignTitle, assignment.task, assignment.contribution].filter(Boolean).join(' '))
         .join(' ');
       const haystack = [
+        member.id,
         member.name,
         member.role,
         member.contributions,
@@ -315,6 +436,51 @@ export default function NgoDashboard() {
       return haystack.includes(query);
     });
   }, [memberRows, memberQuery]);
+
+  const filteredMemberIdSet = useMemo(
+    () => new Set(filteredMemberRows.map((member) => member.id)),
+    [filteredMemberRows]
+  );
+
+  const filteredTaskLeaderboardRows = useMemo(
+    () =>
+      [...memberRows]
+        .filter((member) => filteredMemberIdSet.has(member.id))
+        .sort((a, b) => Number(b.tasksCompleted || 0) - Number(a.tasksCompleted || 0) || a.name.localeCompare(b.name)),
+    [memberRows, filteredMemberIdSet]
+  );
+
+  const filteredMemberOfMonthRows = useMemo(
+    () => memberOfMonthRows.filter((member) => filteredMemberIdSet.has(member.id)),
+    [memberOfMonthRows, filteredMemberIdSet]
+  );
+
+  const filteredCampaignCoverageRows = useMemo(() => {
+    const query = String(memberQuery || '').trim().toLowerCase();
+    if (!query) return campaignCoverageRows;
+
+    return campaignCoverageRows.filter((row) => {
+      const haystack = [
+        row.campaignId,
+        row.campaignTitle,
+        row.memberIds.join(' '),
+        row.memberNames.join(' '),
+        row.tasks.join(' ')
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [campaignCoverageRows, memberQuery]);
+
+  const filteredRoleRows = useMemo(() => {
+    const selected = String(selectedTeamRole || '').trim();
+    if (!selected) return [];
+    return filteredMemberRows.filter((member) =>
+      roleMatchesSelected(selected, member.role || '', member.contributions || '')
+    );
+  }, [filteredMemberRows, selectedTeamRole]);
 
   const filteredHelpRequests = useMemo(() => {
     const q = helpRequestQuery.trim().toLowerCase();
@@ -472,6 +638,13 @@ export default function NgoDashboard() {
     loadHelpRequests();
   }, []);
 
+  useEffect(() => {
+    if (teamListOpen) {
+      setTeamInsightView('members');
+      setSelectedTeamRole('');
+    }
+  }, [teamListOpen]);
+
   const handleApprovalNoteChange = (key, value) => {
     setApprovalNotes((prev) => ({ ...prev, [key]: value }));
   };
@@ -531,6 +704,19 @@ export default function NgoDashboard() {
       setApprovalMessage(err.response?.data?.message || 'Failed to update campaign volunteer status.');
     }
   };
+
+  const openTeamInsightView = (view, role = '') => {
+    setTeamInsightView(view);
+    setSelectedTeamRole(role);
+  };
+
+  const insightViewLabel = useMemo(() => {
+    if (teamInsightView === 'tasks') return 'Tasks Completed Drilldown';
+    if (teamInsightView === 'campaigns') return 'Campaign Coverage Drilldown';
+    if (teamInsightView === 'memberOfMonth') return 'Member of the Month Drilldown';
+    if (teamInsightView === 'role') return selectedTeamRole ? `Role Drilldown: ${selectedTeamRole}` : 'Role Drilldown';
+    return 'All Members Register';
+  }, [teamInsightView, selectedTeamRole]);
 
   if (loading) {
     return <div className="p-6 text-center text-gray-600">Loading NGO dashboard...</div>;
@@ -625,6 +811,20 @@ export default function NgoDashboard() {
           {campaignUpdateAnalyticsMessage && (
             <div className="mt-4 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
               {campaignUpdateAnalyticsMessage}
+            </div>
+          )}
+
+          {!campaignUpdateAnalyticsMessage && hasCampaignUpdatesWithoutRecipients && (
+            <div className="mt-4 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+              Updates are published, but this campaign set has no completed donor records yet. Recipient delivery starts
+              after donations are completed on those campaigns.
+            </div>
+          )}
+
+          {!campaignUpdateAnalyticsMessage && hasEmailDeliveryFailures && (
+            <div className="mt-3 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+              Email attempts are being made but none are sent. Configure SMTP in `backend/.env` (`MAIL_HOST`, `MAIL_PORT`,
+              `MAIL_USER`, `MAIL_PASS`, optional `MAIL_FROM`) to enable email delivery metrics.
             </div>
           )}
 
@@ -1302,55 +1502,326 @@ export default function NgoDashboard() {
 
               <div className="p-5 space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div className="rounded-lg border border-gray-200 p-4">
+                  <button
+                    type="button"
+                    onClick={() => openTeamInsightView('members')}
+                    className={`rounded-lg border p-4 text-left transition ${
+                      teamInsightView === 'members'
+                        ? 'border-indigo-300 bg-indigo-50'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
                     <p className="text-sm text-gray-500">Total Members</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{memberRows.length}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-xs text-indigo-700 mt-1">Open full member register</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openTeamInsightView('tasks')}
+                    className={`rounded-lg border p-4 text-left transition ${
+                      teamInsightView === 'tasks'
+                        ? 'border-indigo-300 bg-indigo-50'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
                     <p className="text-sm text-gray-500">Tasks Completed</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{Number(totalMemberTasksCompleted || 0)}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-xs text-indigo-700 mt-1">Open task leaderboard</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openTeamInsightView('campaigns')}
+                    className={`rounded-lg border p-4 text-left transition ${
+                      teamInsightView === 'campaigns'
+                        ? 'border-indigo-300 bg-indigo-50'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
                     <p className="text-sm text-gray-500">Campaign Coverage</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{memberCampaignCount}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-xs text-indigo-700 mt-1">Open campaign-wise list</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openTeamInsightView('memberOfMonth')}
+                    className={`rounded-lg border p-4 text-left transition ${
+                      teamInsightView === 'memberOfMonth'
+                        ? 'border-indigo-300 bg-indigo-50'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
                     <p className="text-sm text-gray-500">Member of the Month</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{memberOfMonthCount}</p>
-                  </div>
+                    <p className="text-xs text-indigo-700 mt-1">Open badge winners list</p>
+                  </button>
                 </div>
 
                 <div className="rounded-lg border border-gray-200 p-4">
                   <h4 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Team Strength Breakdown</h4>
                   {teamStrengthRows.length > 0 ? (
-                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {teamStrengthRows.map((row) => (
-                        <div key={row.id} className="rounded-lg border border-gray-200 p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-semibold text-gray-900">{row.role}</p>
-                            <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full">
-                              {row.count} members
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-600 mt-1">
-                            {row.contribution || 'Contribution details are not documented yet.'}
-                          </p>
+                    <>
+                      <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {teamStrengthRows.map((row) => (
+                          <button
+                            key={row.id}
+                            type="button"
+                            onClick={() => openTeamInsightView('role', row.role)}
+                            className={`rounded-lg border p-3 text-left transition ${
+                              teamInsightView === 'role' && selectedTeamRole === row.role
+                                ? 'border-indigo-300 bg-indigo-50'
+                                : 'border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-semibold text-gray-900">{row.role}</p>
+                              <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full">
+                                {row.count} members
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {row.contribution || 'Contribution details are not documented yet.'}
+                            </p>
+                            <p className="text-xs text-indigo-700 mt-1">Open role-wise member list</p>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-700">
+                          Team Strength Chart (click bars to drill down)
+                        </p>
+                        <div className="mt-3 space-y-2">
+                          {teamStrengthRows.map((row) => {
+                            const isActive = teamInsightView === 'role' && selectedTeamRole === row.role;
+                            const widthPercent = teamStrengthMaxCount > 0
+                              ? Math.max(8, Math.round((Number(row.count || 0) / teamStrengthMaxCount) * 100))
+                              : 0;
+                            return (
+                              <button
+                                key={`${row.id}-bar`}
+                                type="button"
+                                onClick={() => openTeamInsightView('role', row.role)}
+                                className="w-full text-left"
+                              >
+                                <div className="flex items-center justify-between text-xs text-gray-700">
+                                  <span className={isActive ? 'font-semibold text-indigo-700' : 'font-medium'}>{row.role}</span>
+                                  <span>{row.count} members</span>
+                                </div>
+                                <div className="mt-1 h-2 rounded-full bg-gray-200">
+                                  <div
+                                    className={`h-2 rounded-full ${isActive ? 'bg-indigo-600' : 'bg-emerald-500'}`}
+                                    style={{ width: `${widthPercent}%` }}
+                                  />
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    </>
                   ) : (
                     <p className="mt-2 text-sm text-gray-500">No team strength data available.</p>
                   )}
                 </div>
 
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-4">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <h4 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">
+                      Interactive Detail Panel
+                    </h4>
+                    <span className="text-xs font-medium text-indigo-700">{insightViewLabel}</span>
+                  </div>
+
+                  {teamInsightView === 'members' && (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-white text-gray-700">
+                          <tr>
+                            <th className="text-left px-3 py-2">Member ID</th>
+                            <th className="text-left px-3 py-2">Member</th>
+                            <th className="text-left px-3 py-2">Role</th>
+                            <th className="text-left px-3 py-2">Tasks Completed</th>
+                            <th className="text-left px-3 py-2">Assignments</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredMemberRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="px-3 py-4 text-center text-gray-500">No members found.</td>
+                            </tr>
+                          ) : (
+                            filteredMemberRows.map((member) => (
+                              <tr key={`${member.id}-summary`} className="border-t border-indigo-100">
+                                <td className="px-3 py-2 font-mono text-xs text-gray-700">{member.id}</td>
+                                <td className="px-3 py-2 text-gray-900 font-medium">{member.name}</td>
+                                <td className="px-3 py-2 text-gray-700">{member.role || '-'}</td>
+                                <td className="px-3 py-2 text-gray-900 font-semibold">{member.tasksCompleted}</td>
+                                <td className="px-3 py-2 text-gray-700">{member.campaignAssignments.length}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {teamInsightView === 'tasks' && (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-white text-gray-700">
+                          <tr>
+                            <th className="text-left px-3 py-2">Rank</th>
+                            <th className="text-left px-3 py-2">Member</th>
+                            <th className="text-left px-3 py-2">Member ID</th>
+                            <th className="text-left px-3 py-2">Role</th>
+                            <th className="text-left px-3 py-2">Tasks Completed</th>
+                            <th className="text-left px-3 py-2">Top Tasks</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredTaskLeaderboardRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="px-3 py-4 text-center text-gray-500">No member tasks found.</td>
+                            </tr>
+                          ) : (
+                            filteredTaskLeaderboardRows.map((member, index) => (
+                              <tr key={`${member.id}-tasks`} className="border-t border-indigo-100">
+                                <td className="px-3 py-2 text-gray-900 font-semibold">{index + 1}</td>
+                                <td className="px-3 py-2 text-gray-900 font-medium">{member.name}</td>
+                                <td className="px-3 py-2 font-mono text-xs text-gray-700">{member.id}</td>
+                                <td className="px-3 py-2 text-gray-700">{member.role || '-'}</td>
+                                <td className="px-3 py-2 text-gray-900 font-semibold">{member.tasksCompleted}</td>
+                                <td className="px-3 py-2 text-gray-700">
+                                  {member.tasks.length > 0 ? member.tasks.slice(0, 3).join(', ') : '-'}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {teamInsightView === 'campaigns' && (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-white text-gray-700">
+                          <tr>
+                            <th className="text-left px-3 py-2">Campaign</th>
+                            <th className="text-left px-3 py-2">Campaign ID</th>
+                            <th className="text-left px-3 py-2">Assigned Members</th>
+                            <th className="text-left px-3 py-2">Assignment Records</th>
+                            <th className="text-left px-3 py-2">Tasks Covered</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredCampaignCoverageRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="px-3 py-4 text-center text-gray-500">No campaign assignments found.</td>
+                            </tr>
+                          ) : (
+                            filteredCampaignCoverageRows.map((row) => (
+                              <tr key={`campaign-coverage-${row.key}`} className="border-t border-indigo-100 align-top">
+                                <td className="px-3 py-2 text-gray-900 font-medium">
+                                  {row.campaignId ? (
+                                    <Link to={`/campaigns/${row.campaignId}`} className="text-indigo-700 hover:underline">
+                                      {row.campaignTitle}
+                                    </Link>
+                                  ) : (
+                                    row.campaignTitle
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 font-mono text-xs text-gray-700">{row.campaignId || '-'}</td>
+                                <td className="px-3 py-2 text-gray-700">
+                                  {row.memberIds.length} ({row.memberNames.join(', ')})
+                                </td>
+                                <td className="px-3 py-2 text-gray-900 font-semibold">{row.assignmentsCount}</td>
+                                <td className="px-3 py-2 text-gray-700">{row.tasks.length > 0 ? row.tasks.join(', ') : '-'}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {teamInsightView === 'memberOfMonth' && (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-white text-gray-700">
+                          <tr>
+                            <th className="text-left px-3 py-2">Member</th>
+                            <th className="text-left px-3 py-2">Member ID</th>
+                            <th className="text-left px-3 py-2">Role</th>
+                            <th className="text-left px-3 py-2">Tasks Completed</th>
+                            <th className="text-left px-3 py-2">Badges</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredMemberOfMonthRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="px-3 py-4 text-center text-gray-500">No member-of-the-month data found.</td>
+                            </tr>
+                          ) : (
+                            filteredMemberOfMonthRows.map((member) => (
+                              <tr key={`${member.id}-motm`} className="border-t border-indigo-100">
+                                <td className="px-3 py-2 text-gray-900 font-medium">{member.name}</td>
+                                <td className="px-3 py-2 font-mono text-xs text-gray-700">{member.id}</td>
+                                <td className="px-3 py-2 text-gray-700">{member.role || '-'}</td>
+                                <td className="px-3 py-2 text-gray-900 font-semibold">{member.tasksCompleted}</td>
+                                <td className="px-3 py-2 text-gray-700">{member.badges.join(', ') || '-'}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {teamInsightView === 'role' && (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-white text-gray-700">
+                          <tr>
+                            <th className="text-left px-3 py-2">Role</th>
+                            <th className="text-left px-3 py-2">Member</th>
+                            <th className="text-left px-3 py-2">Member ID</th>
+                            <th className="text-left px-3 py-2">Tasks Completed</th>
+                            <th className="text-left px-3 py-2">Contribution</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredRoleRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="px-3 py-4 text-center text-gray-500">
+                                No members found for role {selectedTeamRole || '-'}.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredRoleRows.map((member) => (
+                              <tr key={`${member.id}-role`} className="border-t border-indigo-100">
+                                <td className="px-3 py-2 text-gray-700">{member.role || '-'}</td>
+                                <td className="px-3 py-2 text-gray-900 font-medium">{member.name}</td>
+                                <td className="px-3 py-2 font-mono text-xs text-gray-700">{member.id}</td>
+                                <td className="px-3 py-2 text-gray-900 font-semibold">{member.tasksCompleted}</td>
+                                <td className="px-3 py-2 text-gray-700">{member.contributions || '-'}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <h4 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">
-                    Member Details
+                    Member Details Register
                   </h4>
                   <input
                     value={memberQuery}
                     onChange={(e) => setMemberQuery(e.target.value)}
-                    placeholder="Search member, role, task, campaign, contribution…"
+                    placeholder="Search member, member ID, role, task, campaign, contribution..."
                     className="w-full md:w-96 px-3 py-2 rounded-lg border border-gray-200 text-sm"
                   />
                 </div>
@@ -1360,6 +1831,7 @@ export default function NgoDashboard() {
                     <thead className="bg-gray-50 text-gray-700">
                       <tr>
                         <th className="text-left px-3 py-2">Member</th>
+                        <th className="text-left px-3 py-2">Member ID</th>
                         <th className="text-left px-3 py-2">Role</th>
                         <th className="text-left px-3 py-2">Tasks Completed</th>
                         <th className="text-left px-3 py-2">Badges</th>
@@ -1371,7 +1843,7 @@ export default function NgoDashboard() {
                     <tbody>
                       {filteredMemberRows.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="px-3 py-6 text-center text-gray-500">
+                          <td colSpan={8} className="px-3 py-6 text-center text-gray-500">
                             No members found for this search.
                           </td>
                         </tr>
@@ -1379,6 +1851,7 @@ export default function NgoDashboard() {
                         filteredMemberRows.map((member) => (
                           <tr key={member.id} className="border-t border-gray-100 align-top">
                             <td className="px-3 py-2 text-gray-800 font-medium">{member.name}</td>
+                            <td className="px-3 py-2 font-mono text-xs text-gray-700">{member.id}</td>
                             <td className="px-3 py-2 text-gray-700">{member.role || '-'}</td>
                             <td className="px-3 py-2 text-gray-900 font-semibold">{member.tasksCompleted}</td>
                             <td className="px-3 py-2 text-gray-700 min-w-[220px]">

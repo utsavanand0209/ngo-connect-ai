@@ -717,8 +717,14 @@ const getAdminDashboardSnapshot = async ({ limit, days, noCache = false }) => {
 
 // Only admin
 router.get('/ngo-registrations', auth(['admin']), async (req, res) => {
-  const ngos = await NGO.find({ verified: false });
-  res.json(ngos);
+  try {
+    // Treat missing verified as pending to support legacy rows.
+    const ngos = await NGO.find().sort({ createdAt: -1 });
+    const pending = (Array.isArray(ngos) ? ngos : []).filter((ngo) => ngo?.verified !== true);
+    res.json(pending);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 router.post('/verify-ngo/:id', auth(['admin']), async (req, res) => {

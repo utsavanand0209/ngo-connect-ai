@@ -1,0 +1,80 @@
+{
+  "runId": "20260309102129",
+  "timestamp": "2026-03-09T10:21:30.733Z",
+  "apiBase": "http://localhost:5001/api",
+  "createdNgos": [
+    {
+      "id": "be584551-a29b-4bc2-9a76-8022e738bd5a",
+      "name": "Scenario NGO 1 20260309102129",
+      "email": "scenario.ngo.202603091021291@example.com"
+    },
+    {
+      "id": "86f54094-a15a-4aad-9a05-3c59ae4b3c68",
+      "name": "Scenario NGO 2 20260309102129",
+      "email": "scenario.ngo.202603091021292@example.com"
+    },
+    {
+      "id": "fb2bc923-43e1-487c-ab2a-fdcfe356db6f",
+      "name": "Scenario NGO 3 20260309102129",
+      "email": "scenario.ngo.202603091021293@example.com"
+    }
+  ],
+  "verification": {
+    "pendingBefore": 4,
+    "pendingAfter": 1,
+    "createdNgosFoundInPendingBefore": [
+      "be584551-a29b-4bc2-9a76-8022e738bd5a",
+      "86f54094-a15a-4aad-9a05-3c59ae4b3c68",
+      "fb2bc923-43e1-487c-ab2a-fdcfe356db6f"
+    ],
+    "createdNgosFoundInPendingAfter": [],
+    "verifiedIds": [
+      "be584551-a29b-4bc2-9a76-8022e738bd5a",
+      "86f54094-a15a-4aad-9a05-3c59ae4b3c68"
+    ],
+    "rejectedIds": [
+      "fb2bc923-43e1-487c-ab2a-fdcfe356db6f"
+    ]
+  },
+  "flagging": {
+    "submitted": [
+      {
+        "targetType": "ngo",
+        "targetId": "be584551-a29b-4bc2-9a76-8022e738bd5a",
+        "targetName": "Scenario NGO 1 20260309102129",
+        "requestId": "aaacab64-8f4c-4582-850a-bfcc5f69fa3e"
+      },
+      {
+        "targetType": "ngo",
+        "targetId": "86f54094-a15a-4aad-9a05-3c59ae4b3c68",
+        "targetName": "Scenario NGO 2 20260309102129",
+        "requestId": "04f24983-2aa8-479d-aa56-8dd8fbdc19f1"
+      },
+      {
+        "targetType": "campaign",
+        "targetId": "34466e3c-b24a-43e2-8396-2fed259458d2",
+        "targetName": "Inclusive Sports Coaching Support - HSR Layout",
+        "requestId": "c90e9dfb-8b8c-4fac-b867-51bcbab04bba"
+      }
+    ],
+    "resolved": [
+      {
+        "requestId": "c90e9dfb-8b8c-4fac-b867-51bcbab04bba",
+        "action": "approve",
+        "finalStatus": "approved"
+      },
+      {
+        "requestId": "04f24983-2aa8-479d-aa56-8dd8fbdc19f1",
+        "action": "approve",
+        "finalStatus": "approved"
+      },
+      {
+        "requestId": "aaacab64-8f4c-4582-850a-bfcc5f69fa3e",
+        "action": "reject",
+        "finalStatus": "rejected"
+      }
+    ],
+    "flaggedNgoCount": 3,
+    "flaggedCampaignCount": 2
+  }
+}

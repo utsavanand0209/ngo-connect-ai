@@ -1,0 +1,57 @@
+Welcome to NGO Connect.
+
+NGO Connect is a full-stack social impact platform that brings donors, volunteers, NGOs, and admins into one integrated workflow.
+
+Instead of separate tools for fundraising, volunteering, communication, and reporting, this platform allows organizations to run everything in one place with better transparency and measurable impact.
+
+We start with the user journey.
+
+After login, users can discover NGOs, explore campaigns, and filter opportunities by cause and location.
+
+The map view helps users find nearby NGOs and understand where campaigns are active.
+
+From campaign pages, users can view goals, progress, updates, and details before they contribute.
+
+On the donation side, the platform supports structured payment flows with methods like UPI, card, and netbanking, with transaction records and contribution tracking.
+
+For volunteering, users can browse opportunities, apply to activities, and monitor their own participation progress.
+
+User dashboards and profiles then provide a clear summary of contributions and activity history.
+
+Next, the trust and engagement layer.
+
+Users can review NGO profile depth, transparency indicators, and impact-oriented campaign content.
+
+They can also communicate directly with NGOs through integrated messaging.
+
+NGO Connect includes smart recommendations and insights so users can discover the most relevant causes faster.
+
+There is also an AI chatbot for guided support across core platform actions.
+
+Now, the Innovation Center.
+
+This is a major differentiator in NGO Connect.
+
+It includes emergency response feeds, giving circles, in-kind wishlist pledges, donor gamification, leaderboards, volunteer endorsements, corporate matching workflows, donor CRM modules, and impact timeline updates.
+
+These features are designed to increase engagement and improve conversion across both financial and non-financial support.
+
+Now switching to the NGO role.
+
+NGOs can manage their organization profile, create campaigns, review progress, and coordinate operational workflows.
+
+They can publish campaign updates, engage supporters, and track delivery and engagement outcomes.
+
+NGOs also use messaging and innovation modules to coordinate community-level execution.
+
+Finally, the admin role.
+
+Admins verify NGO accounts, moderate flagged content, handle operational requests, and monitor platform analytics.
+
+The admin system also includes webhook reliability operations, such as delivery monitoring, dead-letter retries, worker status visibility, and export and cleanup tools.
+
+From a technology perspective, NGO Connect uses a React frontend, an Express API backend with JWT-based role security, and a PostgreSQL relational data model.
+
+This architecture supports scalable workflows for transparency, accountability, and impact delivery.
+
+That is NGO Connect: one connected ecosystem for discovery, donations, volunteering, engagement, and governance.

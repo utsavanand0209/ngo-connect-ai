@@ -1,0 +1,1 @@
+The map view adds geographic context, allowing users to explore nearby NGOs and plan location-aware support and volunteering.
