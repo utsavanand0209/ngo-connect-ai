@@ -362,31 +362,31 @@ Latest UI screenshots captured on March 10, 2026:
 
 ### Home
 
-![Home Typography Refresh](docs/test-reports/typography_home_20260310.png)
+![Home Typography Refresh](docs/screenshots/task-2/home.png)
 
 ### Login
 
-![Login Typography Refresh](docs/test-reports/typography_login_20260310.png)
+![Login Typography Refresh](docs/screenshots/task-2/login.png)
 
 ### User Dashboard
 
-![User Dashboard Typography Refresh](docs/test-reports/typography_dashboard_user_20260310.png)
+![User Dashboard Typography Refresh](docs/screenshots/task-2/user-dashboard.png)
 
 ### NGO Dashboard
 
-![NGO Dashboard Typography Refresh](docs/test-reports/typography_dashboard_ngo_20260310.png)
+![NGO Dashboard Typography Refresh](docs/screenshots/task-2/ngo-dashboard.png)
 
 ### Admin Dashboard
 
-![Admin Dashboard Typography Refresh](docs/test-reports/typography_dashboard_admin_20260310.png)
+![Admin Dashboard Typography Refresh](docs/screenshots/task-2/admin-dashboard.png)
 
 ### Map and Navbar Verification
 
-![Map Navbar Verification](docs/test-reports/map_navbar_verification_20260310_v2.png)
+![Map Navbar Verification](docs/screenshots/task-2/map-navbar.png)
 
 ## Reports and Presentation Assets
 
-- Generated validation and scenario reports: `docs/test-reports/`
+- Generated validation and scenario reports: `docs/test-reports/` (runtime output, intentionally gitignored)
 - Architecture presentation: `docs/organized/documents/NGO_Connect_Architecture_Presentation.pptx`
 - Presentation generator script: `generate_presentation.py`
 
