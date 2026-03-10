@@ -1,0 +1,163 @@
+{
+  "runId": "20260310114459",
+  "generatedAt": "2026-03-10T11:44:59.378Z",
+  "requestedCount": 15,
+  "createdNgos": [
+    {
+      "id": "4ba92fc7-8318-4150-a13e-a9ea4196da1b",
+      "name": "Bengaluru Midday Care Collective",
+      "email": "detailed.bmcc.20260310114459-1@ngo.org",
+      "category": "Food",
+      "orgStrength": 62,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 14
+    },
+    {
+      "id": "f59a5cf7-b8a1-4de1-b37b-5af467a46357",
+      "name": "Rajajinagar School Nutrition Mission",
+      "email": "detailed.rsnm.20260310114459-2@ngo.org",
+      "category": "Food",
+      "orgStrength": 69,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 15
+    },
+    {
+      "id": "483d06a0-7828-42e0-83dd-2658948db90e",
+      "name": "Koramangala Youth Learning Collective",
+      "email": "detailed.kylc.20260310114459-3@ngo.org",
+      "category": "Education",
+      "orgStrength": 76,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 17
+    },
+    {
+      "id": "1dfedaec-f8e9-4708-9694-78a898ac996c",
+      "name": "Whitefield Health Access Trust",
+      "email": "detailed.what.20260310114459-4@ngo.org",
+      "category": "Health",
+      "orgStrength": 83,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 18
+    },
+    {
+      "id": "34b95950-f90d-490c-8f50-94214ace4a1b",
+      "name": "HSR Community Wellness Network",
+      "email": "detailed.hcwn.20260310114459-5@ngo.org",
+      "category": "Health",
+      "orgStrength": 90,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 20
+    },
+    {
+      "id": "3a1dea25-eae6-4749-9b2b-fedb5744528a",
+      "name": "Jayanagar Senior Care Foundation",
+      "email": "detailed.jscf.20260310114459-6@ngo.org",
+      "category": "Elder Care",
+      "orgStrength": 97,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 21
+    },
+    {
+      "id": "a41c2906-6a69-4adc-8c5c-2e1c506bda6d",
+      "name": "Indiranagar Women Livelihood Forum",
+      "email": "detailed.iwlf.20260310114459-7@ngo.org",
+      "category": "Women Empowerment",
+      "orgStrength": 104,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 23
+    },
+    {
+      "id": "46df0f38-5c5c-4417-9e36-733d0983edd6",
+      "name": "Yeshwanthpur Skills Bridge",
+      "email": "detailed.yssb.20260310114459-8@ngo.org",
+      "category": "Skill Development",
+      "orgStrength": 111,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 24
+    },
+    {
+      "id": "a505907f-44d2-4dc5-89cd-979f6f55716b",
+      "name": "Hebbal Lake Guardians Collective",
+      "email": "detailed.hlgc.20260310114459-9@ngo.org",
+      "category": "Environment",
+      "orgStrength": 62,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 14
+    },
+    {
+      "id": "5eac5988-166a-4fa2-be04-77b1007c7d87",
+      "name": "Electronic City Digital Education Trust",
+      "email": "detailed.ecde.20260310114459-10@ngo.org",
+      "category": "Education",
+      "orgStrength": 69,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 15
+    },
+    {
+      "id": "437db051-7756-4024-92e4-80485a7b49d6",
+      "name": "Basavanagudi Child Safety Initiative",
+      "email": "detailed.bcsi.20260310114459-11@ngo.org",
+      "category": "Child Welfare",
+      "orgStrength": 76,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 17
+    },
+    {
+      "id": "df8325e7-0512-4ebb-a22b-30a981ad7085",
+      "name": "Malleshwaram Civic Relief Network",
+      "email": "detailed.mcrn.20260310114459-12@ngo.org",
+      "category": "Relief",
+      "orgStrength": 83,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 18
+    },
+    {
+      "id": "219a6994-cbbc-463d-8a2d-1661efb8babc",
+      "name": "Banashankari Disability Inclusion Foundation",
+      "email": "detailed.bdif.20260310114459-13@ngo.org",
+      "category": "Disability Support",
+      "orgStrength": 90,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 20
+    },
+    {
+      "id": "f483a33f-db4d-42d0-8701-5c7b541a0337",
+      "name": "Marathahalli Migrant Support Collective",
+      "email": "detailed.mmsc.20260310114459-14@ngo.org",
+      "category": "Social Welfare",
+      "orgStrength": 97,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 21
+    },
+    {
+      "id": "8579333a-0215-48a6-89e6-33e8c4fbd7c0",
+      "name": "KR Puram Green Neighbourhood Mission",
+      "email": "detailed.kgnm.20260310114459-15@ngo.org",
+      "category": "Environment",
+      "orgStrength": 104,
+      "campaigns": 3,
+      "opportunities": 2,
+      "members": 23
+    }
+  ],
+  "summary": {
+    "ngos": 15,
+    "campaigns": 45,
+    "opportunities": 30,
+    "members": 280
+  }
+}

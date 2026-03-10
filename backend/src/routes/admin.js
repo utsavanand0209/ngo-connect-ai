@@ -9,6 +9,7 @@ const FlagRequest = require('../models/FlagRequest');
 const HelpRequest = require('../models/HelpRequest');
 const auth = require('../middleware/auth');
 const { query } = require('../db/postgres');
+const { generateId } = require('../db/id');
 const { renderAdminDashboardHtml } = require('../utils/adminDashboardSsr');
 const { dispatchWebhook } = require('../utils/webhookDispatcher');
 const {
@@ -93,6 +94,201 @@ const toCsvValue = (value) => {
   return text;
 };
 
+const nowIso = () => new Date().toISOString();
+
+const toSafeText = (value, maxLength = 400) => String(value || '').trim().slice(0, maxLength);
+
+const toSafeArray = (value) => (Array.isArray(value) ? value : []);
+
+const normalizeVerificationStatus = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'approved' || raw === 'verified') return 'approved';
+  if (raw === 'rejected') return 'rejected';
+  if (raw === 'in_review' || raw === 'in-review') return 'in_review';
+  return 'pending';
+};
+
+const sanitizeNgoForVerification = (ngo = {}) => {
+  const doc = ngo && typeof ngo.toObject === 'function' ? ngo.toObject() : { ...(ngo || {}) };
+  delete doc.password;
+  return doc;
+};
+
+const buildNgoVerificationChecklist = (ngo = {}) => {
+  const registrationId = toSafeText(ngo.registrationId, 120);
+  const verificationDocs = toSafeArray(ngo.verificationDocs).map((entry) => toSafeText(entry, 300)).filter(Boolean);
+  const contactEmail = toSafeText(ngo.email, 160);
+  const contactPhone = toSafeText(ngo.helplineNumber || ngo.mobileNumber, 40);
+  const address = toSafeText(ngo.address, 240);
+  const hasAddressObject = ngo.addressDetails && typeof ngo.addressDetails === 'object'
+    ? Object.values(ngo.addressDetails).some((entry) => toSafeText(entry, 120))
+    : false;
+  const profileNarrativeLength = [ngo.description, ngo.mission, ngo.about]
+    .map((entry) => toSafeText(entry, 1000))
+    .join(' ')
+    .trim()
+    .length;
+  const categoriesCount = toSafeArray(ngo.categories).filter(Boolean).length;
+
+  const checks = [
+    {
+      key: 'registration_id',
+      label: 'Registration ID provided',
+      passed: Boolean(registrationId),
+      detail: registrationId || 'Missing registration identifier'
+    },
+    {
+      key: 'verification_docs',
+      label: 'Verification documents uploaded',
+      passed: verificationDocs.length > 0,
+      detail: verificationDocs.length > 0 ? `${verificationDocs.length} document(s) attached` : 'No documents uploaded'
+    },
+    {
+      key: 'primary_contact',
+      label: 'Primary contact details available',
+      passed: Boolean(contactEmail || contactPhone),
+      detail: [contactEmail, contactPhone].filter(Boolean).join(' • ') || 'No email or helpline number found'
+    },
+    {
+      key: 'address_profile',
+      label: 'Address or service location provided',
+      passed: Boolean(address || hasAddressObject || ngo.location),
+      detail: address || (hasAddressObject ? 'Address details are available.' : 'No address/location details found')
+    },
+    {
+      key: 'ngo_profile',
+      label: 'Basic NGO profile is filled',
+      passed: profileNarrativeLength >= 40 || categoriesCount > 0,
+      detail: profileNarrativeLength >= 40
+        ? `Profile narrative length: ${profileNarrativeLength} chars`
+        : categoriesCount > 0
+          ? `${categoriesCount} category tag(s) provided`
+          : 'No meaningful profile narrative or categories'
+    }
+  ];
+
+  const completed = checks.filter((check) => check.passed).length;
+  const total = checks.length;
+  const completenessPercent = total > 0 ? Number(((completed / total) * 100).toFixed(1)) : 0;
+
+  return {
+    completed,
+    total,
+    completenessPercent,
+    checks,
+    missing: checks.filter((check) => !check.passed).map((check) => check.label),
+    canAutoApprove: completed === total
+  };
+};
+
+const normalizeVerificationHistory = (ngo = {}) => {
+  if (!Array.isArray(ngo.verificationHistory)) return [];
+  return ngo.verificationHistory
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const action = toSafeText(entry.action || '', 30).toLowerCase();
+      if (!action) return null;
+      const decidedAt = toSafeText(entry.decidedAt || entry.createdAt || '', 80) || nowIso();
+      const decidedBy = toSafeText(entry.decidedBy || '', 80) || null;
+      return {
+        id: toSafeText(entry.id || '', 80) || null,
+        action,
+        decidedAt,
+        decidedBy,
+        note: toSafeText(entry.note || '', 400),
+        reason: toSafeText(entry.reason || '', 400),
+        suggestions: toSafeText(entry.suggestions || '', 400)
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => new Date(right.decidedAt).getTime() - new Date(left.decidedAt).getTime());
+};
+
+const appendVerificationHistoryEntry = (ngo = {}, payload = {}) => {
+  const history = normalizeVerificationHistory(ngo);
+  const entry = {
+    id: generateId(),
+    action: toSafeText(payload.action || 'updated', 30).toLowerCase() || 'updated',
+    decidedAt: nowIso(),
+    decidedBy: toSafeText(payload.decidedBy || '', 80) || null,
+    note: toSafeText(payload.note || '', 400),
+    reason: toSafeText(payload.reason || '', 400),
+    suggestions: toSafeText(payload.suggestions || '', 400)
+  };
+  return [entry, ...history].slice(0, 50);
+};
+
+const isPendingNgoVerification = (ngo = {}) =>
+  ngo?.verified !== true && normalizeVerificationStatus(ngo?.verificationStatus) !== 'rejected';
+
+const toVerificationQueueItem = (rawNgo = {}) => {
+  const ngo = sanitizeNgoForVerification(rawNgo);
+  const checklist = buildNgoVerificationChecklist(ngo);
+  const status = normalizeVerificationStatus(ngo.verificationStatus);
+  const docs = toSafeArray(ngo.verificationDocs).map((entry) => toSafeText(entry, 300)).filter(Boolean);
+  const categories = toSafeArray(ngo.categories).map((entry) => toSafeText(entry, 80)).filter(Boolean);
+  const history = normalizeVerificationHistory(ngo);
+  const latestDecision = history[0] || null;
+
+  return {
+    id: toSafeText(ngo.id, 80),
+    name: toSafeText(ngo.name, 180),
+    email: toSafeText(ngo.email, 180),
+    helplineNumber: toSafeText(ngo.helplineNumber, 40),
+    registrationId: toSafeText(ngo.registrationId, 120),
+    category: toSafeText(ngo.category, 80),
+    categories,
+    address: toSafeText(ngo.address, 280),
+    addressDetails: ngo.addressDetails && typeof ngo.addressDetails === 'object' ? ngo.addressDetails : null,
+    location: ngo.location || null,
+    verified: ngo.verified === true,
+    verificationStatus: status,
+    verificationReviewedAt: ngo.verificationReviewedAt || null,
+    verificationReviewedBy: ngo.verificationReviewedBy || null,
+    verificationReviewNote: toSafeText(ngo.verificationReviewNote, 400),
+    verificationRejectionReason: toSafeText(ngo.verificationRejectionReason, 400),
+    verificationRejectionSuggestions: toSafeText(ngo.verificationRejectionSuggestions, 400),
+    verificationDocs: docs,
+    createdAt: ngo.createdAt || null,
+    updatedAt: ngo.updatedAt || null,
+    checklist,
+    lastDecision: latestDecision,
+    verificationHistory: history.slice(0, 10)
+  };
+};
+
+const buildVerificationSummary = (items = []) => {
+  const summary = {
+    total: items.length,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+    inReview: 0,
+    completedChecks: 0,
+    totalChecks: 0,
+    averageCompleteness: 0
+  };
+
+  for (const item of items) {
+    const status = normalizeVerificationStatus(item.verificationStatus);
+    if (status === 'approved') summary.approved += 1;
+    else if (status === 'rejected') summary.rejected += 1;
+    else if (status === 'in_review') summary.inReview += 1;
+    else summary.pending += 1;
+
+    const checklist = item.checklist || {};
+    summary.completedChecks += Number(checklist.completed || 0);
+    summary.totalChecks += Number(checklist.total || 0);
+  }
+
+  if (summary.total > 0) {
+    const totalPercent = items.reduce((sum, item) => sum + Number(item?.checklist?.completenessPercent || 0), 0);
+    summary.averageCompleteness = Number((totalPercent / summary.total).toFixed(1));
+  }
+
+  return summary;
+};
+
 const computeAdminDashboardSnapshot = async ({ limit, days }) => {
   const [
     { rows: [statsRow = {}] },
@@ -112,7 +308,12 @@ const computeAdminDashboardSnapshot = async ({ limit, days }) => {
     query(
       `
       SELECT
-        (SELECT COUNT(*) FROM ngos_rel WHERE COALESCE(safe_bool(source_doc->>'verified'), false) = false) AS pending_ngos,
+        (
+          SELECT COUNT(*)
+          FROM ngos_rel
+          WHERE COALESCE(safe_bool(source_doc->>'verified'), false) = false
+            AND LOWER(COALESCE(NULLIF(source_doc->>'verificationStatus', ''), 'pending')) <> 'rejected'
+        ) AS pending_ngos,
         (SELECT COUNT(*) FROM ngos_rel WHERE COALESCE(safe_bool(source_doc->>'verified'), false) = true) AS verified_ngos,
         (SELECT COUNT(*) FROM ngos_rel) AS ngos_total,
         (SELECT COUNT(*) FROM campaigns_rel) AS campaigns_total,
@@ -325,6 +526,7 @@ const computeAdminDashboardSnapshot = async ({ limit, days }) => {
       SELECT external_id AS ngo_id, source_doc AS ngo_doc, created_at AS ngo_created_at
       FROM ngos_rel
       WHERE COALESCE(safe_bool(source_doc->>'verified'), false) = false
+        AND LOWER(COALESCE(NULLIF(source_doc->>'verificationStatus', ''), 'pending')) <> 'rejected'
       ORDER BY created_at DESC
       LIMIT $1
       `,
@@ -657,13 +859,16 @@ const computeAdminDashboardSnapshot = async ({ limit, days }) => {
     },
     pendingNgos: pendingNgoRows.map((row) => {
       const ngo = toDoc(row, 'ngo_id', 'ngo_doc');
+      const queueItem = toVerificationQueueItem(ngo);
       return {
-        id: ngo.id,
-        name: ngo.name,
-        email: ngo.email,
-        categories: ngo.categories || [],
-        registrationId: ngo.registrationId,
-        createdAt: ngo.createdAt || row.ngo_created_at
+        id: queueItem.id,
+        name: queueItem.name,
+        email: queueItem.email,
+        categories: queueItem.categories,
+        registrationId: queueItem.registrationId,
+        verificationStatus: queueItem.verificationStatus,
+        completenessPercent: queueItem.checklist?.completenessPercent || 0,
+        createdAt: queueItem.createdAt || row.ngo_created_at
       };
     }),
     flagged: {
@@ -715,26 +920,225 @@ const getAdminDashboardSnapshot = async ({ limit, days, noCache = false }) => {
   return snapshot;
 };
 
+const createVerificationNotifications = async ({ ngo, action, adminId, reason, suggestions }) => {
+  const ngoName = toSafeText(ngo?.name || ngo?.id || 'NGO', 200);
+  const ngoId = toSafeText(ngo?.id, 80);
+  const decision = action === 'approved' ? 'approved' : 'rejected';
+  const title = decision === 'approved'
+    ? 'NGO verification approved'
+    : 'NGO verification update: action required';
+  const message = decision === 'approved'
+    ? `Your NGO profile "${ngoName}" has been approved by admin.`
+    : `Your NGO profile "${ngoName}" was rejected by admin.${reason ? ` Reason: ${reason}` : ''}${suggestions ? ` Suggested fixes: ${suggestions}` : ''}`;
+
+  try {
+    await Notification.create({
+      title,
+      message,
+      audience: 'ngos',
+      recipientRole: 'ngo',
+      recipientNgoId: ngoId,
+      notificationType: 'ngo_verification',
+      verificationStatus: decision,
+      ngoId,
+      createdBy: adminId
+    });
+
+    await Notification.create({
+      title: `NGO ${decision}: ${ngoName}`,
+      message: decision === 'approved'
+        ? `Admin approved NGO ${ngoName}.`
+        : `Admin rejected NGO ${ngoName}.${reason ? ` Reason: ${reason}` : ''}`,
+      audience: 'admins',
+      recipientRole: 'admin',
+      notificationType: 'ngo_verification_admin',
+      verificationStatus: decision,
+      ngoId,
+      createdBy: adminId
+    });
+  } catch (err) {
+    // Notification failures should not block verification actions.
+  }
+};
+
 // Only admin
 router.get('/ngo-registrations', auth(['admin']), async (req, res) => {
   try {
-    // Treat missing verified as pending to support legacy rows.
     const ngos = await NGO.find().sort({ createdAt: -1 });
-    const pending = (Array.isArray(ngos) ? ngos : []).filter((ngo) => ngo?.verified !== true);
-    res.json(pending);
+    const pending = (Array.isArray(ngos) ? ngos : [])
+      .filter((ngo) => isPendingNgoVerification(ngo))
+      .map((ngo) => toVerificationQueueItem(ngo));
+    return res.json(pending);
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.get('/ngo-verification-queue', auth(['admin']), async (req, res) => {
+  try {
+    const statusRaw = String(req.query.status || 'pending').trim().toLowerCase();
+    const statusFilter = statusRaw === 'all' ? 'all' : normalizeVerificationStatus(statusRaw);
+    const queryText = toSafeText(req.query.q, 160).toLowerCase();
+
+    const ngos = await NGO.find().sort({ createdAt: -1 });
+    const allItems = (Array.isArray(ngos) ? ngos : []).map((ngo) => toVerificationQueueItem(ngo));
+    const summary = buildVerificationSummary(allItems);
+
+    const reviewedCount = summary.approved + summary.rejected;
+    const reviewProgressPercent = summary.total > 0
+      ? Number(((reviewedCount / summary.total) * 100).toFixed(1))
+      : 0;
+
+    const filteredItems = allItems.filter((item) => {
+      if (statusFilter !== 'all' && normalizeVerificationStatus(item.verificationStatus) !== statusFilter) {
+        return false;
+      }
+      if (!queryText) return true;
+      const haystack = [
+        item.id,
+        item.name,
+        item.email,
+        item.registrationId,
+        item.helplineNumber,
+        item.category,
+        item.address,
+        ...(Array.isArray(item.categories) ? item.categories : [])
+      ]
+        .map((entry) => String(entry || '').toLowerCase())
+        .join(' ');
+      return haystack.includes(queryText);
+    });
+
+    const recentHistory = allItems
+      .flatMap((item) =>
+        (Array.isArray(item.verificationHistory) ? item.verificationHistory : []).map((entry) => ({
+          ...entry,
+          ngoId: item.id,
+          ngoName: item.name,
+          ngoEmail: item.email,
+          statusAfterAction:
+            entry.action === 'approved'
+              ? 'approved'
+              : entry.action === 'rejected'
+                ? 'rejected'
+                : item.verificationStatus
+        }))
+      )
+      .sort((left, right) => new Date(right.decidedAt).getTime() - new Date(left.decidedAt).getTime())
+      .slice(0, 80);
+
+    return res.json({
+      generatedAt: nowIso(),
+      filters: {
+        status: statusFilter,
+        query: queryText
+      },
+      summary,
+      progress: {
+        reviewedCount,
+        total: summary.total,
+        reviewProgressPercent
+      },
+      items: filteredItems,
+      recentHistory
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
 router.post('/verify-ngo/:id', auth(['admin']), async (req, res) => {
-  const ngo = await NGO.findByIdAndUpdate(req.params.id, { verified: true }, { new: true });
-  res.json({ message: 'NGO verified', ngo });
+  try {
+    const ngoId = toSafeText(req.params.id, 120);
+    if (!ngoId) return res.status(400).json({ message: 'NGO id is required.' });
+
+    const ngo = await NGO.findById(ngoId);
+    if (!ngo) return res.status(404).json({ message: 'NGO not found.' });
+
+    const checklist = buildNgoVerificationChecklist(ngo);
+    const enforceChecklist = req.body?.enforceChecklist === true;
+    if (enforceChecklist && !checklist.canAutoApprove) {
+      return res.status(400).json({
+        message: 'NGO profile is incomplete for verification.',
+        missing: checklist.missing
+      });
+    }
+
+    const note = toSafeText(req.body?.note, 400);
+    ngo.verified = true;
+    ngo.verificationStatus = 'approved';
+    ngo.verificationReviewedAt = nowIso();
+    ngo.verificationReviewedBy = req.user.id;
+    ngo.verificationReviewNote = note;
+    ngo.verificationRejectionReason = null;
+    ngo.verificationRejectionSuggestions = null;
+    ngo.verificationHistory = appendVerificationHistoryEntry(ngo, {
+      action: 'approved',
+      decidedBy: req.user.id,
+      note
+    });
+    await ngo.save();
+
+    await createVerificationNotifications({
+      ngo,
+      action: 'approved',
+      adminId: req.user.id
+    });
+
+    return res.json({ message: 'NGO verified successfully.', ngo: toVerificationQueueItem(ngo) });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error' });
+  }
 });
 
 router.post('/reject-ngo/:id', auth(['admin']), async (req, res) => {
-  await NGO.findByIdAndDelete(req.params.id);
-  res.json({ message: 'NGO rejected and deleted' });
+  try {
+    const ngoId = toSafeText(req.params.id, 120);
+    if (!ngoId) return res.status(400).json({ message: 'NGO id is required.' });
+
+    const ngo = await NGO.findById(ngoId);
+    if (!ngo) return res.status(404).json({ message: 'NGO not found.' });
+
+    const reason = toSafeText(req.body?.reason, 400);
+    const suggestions = toSafeText(req.body?.suggestions, 400);
+    const note = toSafeText(req.body?.note, 400);
+    const enforceReason = req.body?.enforceReason === true;
+    if (enforceReason && !reason) {
+      return res.status(400).json({ message: 'Rejection reason is required.' });
+    }
+
+    const rejectionReason = reason || 'Rejected by admin.';
+    ngo.verified = false;
+    ngo.verificationStatus = 'rejected';
+    ngo.verificationReviewedAt = nowIso();
+    ngo.verificationReviewedBy = req.user.id;
+    ngo.verificationReviewNote = note;
+    ngo.verificationRejectionReason = rejectionReason;
+    ngo.verificationRejectionSuggestions = suggestions || null;
+    ngo.verificationHistory = appendVerificationHistoryEntry(ngo, {
+      action: 'rejected',
+      decidedBy: req.user.id,
+      note,
+      reason: rejectionReason,
+      suggestions
+    });
+    await ngo.save();
+
+    await createVerificationNotifications({
+      ngo,
+      action: 'rejected',
+      adminId: req.user.id,
+      reason: rejectionReason,
+      suggestions
+    });
+
+    return res.json({
+      message: 'NGO rejected with feedback.',
+      ngo: toVerificationQueueItem(ngo)
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error' });
+  }
 });
 
 router.delete('/user/:id', auth(['admin']), async (req, res) => {
@@ -1213,7 +1617,7 @@ router.get('/analytics', auth(['admin']), async (req, res) => {
     ] = await Promise.all([
       User.countDocuments({}),
       NGO.countDocuments({ verified: true }),
-      NGO.countDocuments({ verified: false }),
+      NGO.find({}).then((ngos) => (Array.isArray(ngos) ? ngos.filter((ngo) => isPendingNgoVerification(ngo)).length : 0)),
       Campaign.countDocuments({}),
       NGO.countDocuments({ flagged: true }),
       Campaign.countDocuments({ flagged: true }),

@@ -118,12 +118,14 @@ const renderPendingNgoCards = (ngos = []) =>
   (ngos || [])
     .map((ngo) => `
       <div class="card-item">
-        <div class="strong">${escapeHtml(ngo.name || 'NGO')}</div>
+        <div class="strong">
+          <a href="/admin/verifications?status=pending&ngoId=${encodeURIComponent(String(ngo.id || ''))}" target="_blank" rel="noreferrer">${escapeHtml(ngo.name || 'NGO')}</a>
+        </div>
         <div class="muted small">${escapeHtml(ngo.email || 'No email')}</div>
         <div class="muted small">Submitted: ${when(ngo.createdAt)}</div>
+        <div class="muted small">Open full profile, documents, checklist, and history before any decision.</div>
         <div class="actions">
-          <button class="btn btn-green" data-action="verifyNgo" data-id="${escapeHtml(ngo.id)}">Verify</button>
-          <button class="btn btn-red" data-action="rejectNgo" data-id="${escapeHtml(ngo.id)}">Reject</button>
+          <a class="btn btn-dark" href="/admin/verifications?status=pending&ngoId=${encodeURIComponent(String(ngo.id || ''))}" target="_blank" rel="noreferrer">Open Detailed Verification</a>
         </div>
       </div>
     `)
@@ -205,6 +207,8 @@ const renderAdminDashboardHtml = (snapshot = {}) => {
     .right { text-align: right; }
     .nowrap { white-space: nowrap; }
     .strong { font-weight: 800; }
+    .strong a { color: inherit; text-decoration: none; }
+    .strong a:hover { text-decoration: underline; }
     .muted { color: var(--muted); }
     .small { font-size: 12px; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace; }
@@ -390,7 +394,7 @@ const renderAdminDashboardHtml = (snapshot = {}) => {
 
     <div class="panel">
       <h2>Moderation Actions</h2>
-      <p>Verify pending NGOs and resolve flagged content.</p>
+      <p>Resolve flags and open detailed NGO verification review.</p>
 
       <div class="controls">
         <div class="left"><span class="strong">Pending NGOs</span></div>
@@ -651,13 +655,14 @@ const renderAdminDashboardHtml = (snapshot = {}) => {
     }).join('');
 
     const renderPendingNgoCards = (ngos) => (ngos || []).slice(0, 10).map((ngo) => {
+      const href = '/admin/verifications?status=pending&ngoId=' + encodeURIComponent(String(ngo.id || ''));
       return '<div class=\"card-item\">' +
-        '<div class=\"strong\">' + escapeHtml(ngo.name || 'NGO') + '</div>' +
+        '<div class=\"strong\"><a href=\"' + href + '\" target=\"_blank\" rel=\"noreferrer\">' + escapeHtml(ngo.name || 'NGO') + '</a></div>' +
         '<div class=\"muted small\">' + escapeHtml(ngo.email || 'No email') + '</div>' +
         '<div class=\"muted small\">Submitted: ' + when(ngo.createdAt) + '</div>' +
+        '<div class=\"muted small\">Open full profile, documents, checklist, and history before any decision.</div>' +
         '<div class=\"actions\">' +
-          '<button class=\"btn btn-green\" data-action=\"verifyNgo\" data-id=\"' + escapeHtml(ngo.id) + '\">Verify</button>' +
-          '<button class=\"btn btn-red\" data-action=\"rejectNgo\" data-id=\"' + escapeHtml(ngo.id) + '\">Reject</button>' +
+          '<a class=\"btn btn-dark\" href=\"' + href + '\" target=\"_blank\" rel=\"noreferrer\">Open Detailed Verification</a>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -825,4 +830,3 @@ const renderAdminDashboardHtml = (snapshot = {}) => {
 module.exports = {
   renderAdminDashboardHtml
 };
-

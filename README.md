@@ -1,177 +1,91 @@
-# NGO-Connect
+# NGO Connect
 
-NGO-Connect is a full-stack platform that connects donors, volunteers, NGOs, and admins in one workflow. The project now runs on a PostgreSQL-backed architecture across the backend runtime.
+NGO Connect is a full-stack social impact platform for NGOs, donors, volunteers, and admins. It supports campaign fundraising, volunteer operations, campaign updates with delivery analytics, verification workflows, webhook reliability tooling, and innovation modules like giving circles and emergency response feeds.
 
-## Phase Progress (Current)
+This repository contains both the backend API and frontend SPA, plus data seeding/scenario scripts and generated test reports.
 
-### Phase 3: Donor Engagement + Delivery Analytics
-- NGOs can publish campaign updates from campaign pages.
-- Updates trigger personalized donor notifications and optional email delivery.
-- Engagement is tracked using open/click counters.
-- Added APIs:
-  - `POST /api/campaigns/:id/updates`
-  - `GET /api/campaigns/:id/updates/analytics`
-  - `POST /api/notifications/:id/open`
+## Table of Contents
 
-### Phase 4: NGO Analytics Hub + Webhooks
-- NGO dashboard now shows aggregate campaign update analytics across all NGO campaigns.
-- Added API:
-  - `GET /api/campaigns/ngo/campaign-updates/analytics`
-- Added outbound webhook framework with signed events:
-  - `campaign.update.created`
-  - `notification.engagement`
-- Added webhook smoke test:
-  - `npm run smoke:webhook` (from `backend/`)
+1. [What This Project Solves](#what-this-project-solves)
+2. [Core Features](#core-features)
+3. [Tech Stack](#tech-stack)
+4. [Architecture Overview](#architecture-overview)
+5. [Repository Structure](#repository-structure)
+6. [Local Setup](#local-setup)
+7. [Run the Project](#run-the-project)
+8. [Default Seed Accounts](#default-seed-accounts)
+9. [Environment Variables](#environment-variables)
+10. [Email Delivery Metrics (Resend)](#email-delivery-metrics-resend)
+11. [Important API Areas](#important-api-areas)
+12. [Scripts and Utilities](#scripts-and-utilities)
+13. [Troubleshooting](#troubleshooting)
+14. [Task 2 Screenshots](#task-2-screenshots)
+15. [Reports and Presentation Assets](#reports-and-presentation-assets)
 
-### Phase 5: Webhook Reliability + Dead-Letter Operations
-- Added persistent webhook delivery logs table (`webhook_deliveries_rel`).
-- Failed deliveries are now captured in dead-letter status for admin replay.
-- Added admin webhook operations:
-  - `GET /api/admin/webhooks`
-  - `POST /api/admin/webhooks/:id/retry`
-- Admin dashboard now includes a dead-letter queue panel with replay actions.
-- Added webhook receiver example with signature verification and replay protection:
-  - `backend/scripts/webhookReceiverExample.js`
+## What This Project Solves
 
-### Phase 6: Automated Replay + Alerting
-- Added automatic dead-letter replay worker with exponential backoff.
-- Added worker controls:
-  - `GET /api/admin/webhooks/worker/status`
-  - `POST /api/admin/webhooks/worker/run`
-- Added backlog alerting for dead-letter queue via email and Slack.
-- Added one-shot worker tick command:
-  - `npm run webhook:worker:tick` (from `backend/`)
-- Added end-to-end worker replay smoke test:
-  - `npm run smoke:webhook:worker` (from `backend/`)
+NGO Connect centralizes the full NGO engagement lifecycle:
 
-### Phase 7: Webhook Metrics + Export
-- Added admin webhook metrics API for windowed summary, event breakdown, and trend:
-  - `GET /api/admin/webhooks/metrics?hours=24`
-- Added webhook delivery export API:
-  - `GET /api/admin/webhooks/export?format=csv|json`
-- Admin dashboard now includes metrics cards, event performance table, and CSV export.
+- NGOs create campaigns, publish updates, and manage volunteers.
+- Donors discover causes, contribute using payment gateways, and track impact.
+- Volunteers find opportunities, register shifts, and receive endorsements/certificates.
+- Admins moderate verifications, monitor webhook reliability, and run platform-level operations.
 
-### Phase 8: Delivery Retention Cleanup
-- Added cleanup API for retention-based purge:
-  - `POST /api/admin/webhooks/cleanup`
-- Added cleanup CLI:
-  - `npm run webhook:cleanup` (from `backend/`)
-- Admin dashboard now supports dry-run cleanup and 30-day purge action.
+## Core Features
 
-### Phase 9: Runtime Worker Visibility
-- Worker status now exposes runtime telemetry (`lastTickAt`, `lastResult`, `lastError`, `tickCount`, `isRunning`).
-- Admin dashboard now surfaces last worker tick time for faster operations debugging.
+### Role-Based Platform
 
-### Phase 10: Innovation Ecosystem + Transparency
-- Added full innovation API surface under `/api/innovation`.
-- Added NGO trust endpoint:
-  - `GET /api/ngos/:id/transparency`
-- Added frontend Innovation Center (`/innovation-center`) for users/NGOs.
-- Implemented feature modules:
-  - giving circles
-  - in-kind wishlist + pledges
-  - volunteer shifts/reminders/logs/export
-  - donor CRM segments/notes/messaging
-  - impact timeline updates
-  - corporate donation matching
-  - emergency response feed and toggles
-  - volunteer endorsements
-  - gamification summary and leaderboard
-- Innovation flow fixes:
-  - wishlist quantities now reflect committed pledges immediately
-  - giving circles and wishlist needs auto-close on completion and block extra contributions/pledges
-  - emergency campaign contributions in Innovation Center now use the full payment method + gateway flow (UPI/card/netbanking)
-  - giving circle contributions now use payment method + gateway flow (UPI/card) before recording the circle contribution
+- JWT authentication and role guards for `user`, `ngo`, and `admin`.
+- Dedicated dashboards for each role.
+- Admin moderation flows for NGO verification and platform governance.
 
-### Phase 11: End-To-End Role Scenario + Data Flood Testing
-- Added high-volume role workflow scenario runner:
-  - `npm run scenario:flood` (from `backend/`)
-- Added role moderation scenario runner:
-  - `npm run scenario:roles` (from `backend/`)
-- Scenario runner now creates and validates cross-role workflows for:
-  - users, NGOs, admin moderation
-  - campaigns, members, opportunities, shifts, wishlists, pledges
-  - donations, campaign updates, messaging, help requests, endorsements
-  - CRM segments, corporate matching, emergency feed, webhook admin operations
-- Automated scenario reports are now written to:
-  - `docs/test-reports/`
+### Campaigns, Donations, and Updates
 
-### Phase 12: Campaign Update Analytics Reliability
-- Legacy campaign updates are now normalized and included in analytics totals.
-- User dashboard now tracks campaign-update notification opens automatically when update notifications are viewed.
-- Click tracking remains linked to `View Campaign Update` action.
-- Email delivery metric behavior:
-  - `Email Delivery` only increases when SMTP is configured and emails are actually sent.
-  - without SMTP (`MAIL_*` not set), attempts can increase while sent remains `0`.
+- Campaign creation and management by NGOs.
+- Donation flow with provider abstraction (`mock` and Razorpay integration path).
+- Campaign updates publication and recipient delivery analytics.
+- Notification engagement tracking (open/click rate).
 
-## Innovation Center Features And Flow
+### Campaign Update Analytics
 
-Route: `/innovation-center` (for authenticated `user` and `ngo` roles).
+- NGO-level aggregate campaign update analytics endpoint.
+- Delivery metrics across in-app and email channels.
+- Legacy update normalization for analytics consistency.
 
-### User Modules
-- Emergency Response Feed: see active emergency campaigns/opportunities/wishlist needs and contribute directly.
-- Giving Circles: create/join circles, contribute money, and track progress/member counts until need completion lock.
-- In-Kind Wishlist: pledge quantities against item needs; completed items are locked with `Need Completed`.
-- Gamification + Endorsements: view points, badges, leaderboard, and NGO-issued volunteer endorsements.
-- Corporate Matching: create/link company profiles and evaluate/approve eligible match records.
+### Email Delivery and Notification System
 
-### NGO Modules
-- Wishlist Management: create in-kind needs and mark operational fulfillment state via pledges and approvals.
-- Impact Updates: publish campaign-level progress/utilization updates.
-- Donor CRM: manage donor notes, build segments, and send targeted segment messages.
-- Volunteer Operations: schedule shifts, capture volunteer logs, approve/reject logs, and export logs.
-- Emergency Controls: mark campaigns/opportunities as emergency to surface them in emergency feed.
+- In-app notifications for campaign updates.
+- Optional email sends using SMTP or Resend.
+- Delivery counters (`emailAttempted`, `emailSent`) wired into analytics.
 
-### Money Contribution Flow In Innovation Center
-- Emergency campaigns:
-  1. User enters amount + payment method (`upi`/`card`/`netbanking`) in Innovation Center.
-  2. Frontend initiates donation payment order (`/api/donations/campaign/:id/initiate`).
-  3. Checkout runs on configured provider (`mock` or Razorpay).
-  4. Payment is confirmed (`/api/donations/:id/confirm`) and campaign totals update.
-- Giving circles:
-  1. User enters amount + payment method (`upi`/`card`) in Giving Circles list.
-  2. Same initiate + checkout + confirm donation flow runs first.
-  3. On successful payment confirmation, circle contribution is recorded (`/api/innovation/giving-circles/:id/contribute`).
-  4. Circle progress/remaining amount refreshes; completed circles lock further contributions.
+### Webhook Reliability Operations
 
-## Architecture At A Glance
+- Signed webhook events for update creation and engagement events.
+- Persistent delivery logs and dead-letter queue support.
+- Admin replay operations, runtime worker controls, metrics, and exports.
+- Retention cleanup APIs and CLI.
 
-```
-React SPA (frontend)
-  -> Axios API client + JWT
-Express API (backend)
-  -> Route handlers + auth middleware + service layer
-PostgreSQL
-  -> *_rel tables + JSONB source_doc + relational keys/indexes
-```
+### Innovation Center
 
-## Repository Layout
+- Giving circles with contribution progress and completion locks.
+- In-kind wishlist and pledge tracking.
+- Volunteer shift scheduling/logging/export.
+- Donor CRM notes/segments/messaging.
+- Emergency response surfacing and contribution flows.
+- Corporate donation matching and gamification views.
 
-```
-Ngo-Connect/
-├── backend/
-│   ├── sql/                     # PostgreSQL schema (normalized_schema.sql)
-│   ├── src/
-│   │   ├── db/                  # pg pool, model factory, query helpers
-│   │   ├── middleware/          # JWT auth + role checks
-│   │   ├── models/              # Model wrappers mapped to *_rel tables
-│   │   ├── routes/              # Domain API routes
-│   │   ├── services/            # External service adapters (payments)
-│   │   └── utils/               # Utility helpers (certificates, etc.)
-│   ├── docs/                    # Migration/design notes
-│   └── seed.js                  # Sample data seeding
-├── frontend/
-│   └── src/
-│       ├── components/          # Shared UI + route guards
-│       ├── pages/               # Feature pages (user/ngo/admin)
-│       ├── services/            # API client
-│       └── utils/               # Client-side helpers
-└── README.md
-```
+### Data and Scenario Testing Utilities
 
-## Frontend Design
+- Flood scenario generation for stress testing.
+- Role workflow scenario scripts.
+- Verification interface scenario scripts.
+- Fraud scoring test runner.
+- Test reports auto-written to `docs/test-reports/`.
 
-### Core Stack
+## Tech Stack
+
+### Frontend
+
 - React 18
 - React Router v6
 - Axios
@@ -179,365 +93,304 @@ Ngo-Connect/
 - Recharts
 - Leaflet + react-leaflet
 
-### Routing And Access Control
-- `frontend/src/App.js` defines all page routes.
-- `ProtectedRoute` gates authenticated routes.
-- `UserRoute` gates donor/volunteer-only screens.
-- `AdminRoute` gates admin-only screens.
+### Backend
 
-### Feature Areas
-- Public: Home, NGO list/profile, campaign list/details.
-- User: discover NGOs, donations, volunteer campaigns/opportunities, recommendations, insights, dashboard/profile, messaging.
-- NGO: profile updates, campaign creation, volunteer and donation operations.
-- Admin: NGO verification, flags moderation, categories, notifications, requests, analytics, user management.
-
-### API Client Pattern
-- `frontend/src/services/api.js` centralizes all HTTP calls.
-- JWT token is injected via Axios request interceptor.
-- API base comes from `REACT_APP_API_URL` (defaults to `http://localhost:5001/api`).
-- Frontend exposes feature-specific API helpers for donations, volunteering, certificates, categories, requests, recommendations, and NGO discovery.
-
-## Backend Design
-
-### Runtime Stack
 - Node.js + Express
 - PostgreSQL (`pg`)
-- JWT auth (`jsonwebtoken`)
+- JWT (`jsonwebtoken`)
 - Password hashing (`bcryptjs`)
-- Multer uploads
-- Gemini integration (`@google/generative-ai`)
+- File uploads (`multer`)
+- Nodemailer (SMTP)
+- Resend HTTP API integration
 
-### API Composition
-Mounted in `backend/src/server.js`:
-- `/api/auth`
-- `/api/ngos`
-- `/api/campaigns`
-- `/api/donations`
-- `/api/volunteering`
-- `/api/certificates`
-- `/api/messages`
-- `/api/notifications`
-- `/api/categories`
-- `/api/requests`
-- `/api/users`
-- `/api/admin`
-- `/api/ai`
-- `/api/innovation`
+## Architecture Overview
 
-### Layered Structure
-- Routes: request validation, authorization, response shaping.
-- Middleware: token verification + role-based access.
-- Models: table mappings via `createModel` in `backend/src/db/modelFactory.js`.
-- DB layer: pooled pg connection + SQL helpers in `backend/src/db/postgres.js`.
-- Services: payment gateway abstraction (`mock` and `razorpay`).
-
-### Key Backend Flows
-- Donation flow:
-  - Initiate payment order (`/api/donations/campaign/:id/initiate`).
-  - Confirm payment (`/api/donations/:id/confirm`).
-  - Update donation state, campaign amount, and certificate approval workflow.
-- Volunteer flow:
-  - Opportunity publishing by NGOs.
-  - User applications and completion state transitions.
-  - NGO certificate approval decision endpoints.
-- Support requests (help requests):
-  - Users submit a request to a selected NGO (`/api/requests`).
-  - NGOs manage request status in their dashboard inbox (`/api/requests/ngo`).
-  - Admin dashboard snapshot includes a support-requests panel (`/api/admin/dashboard`).
-- Moderation flag requests:
-  - Users request admin review for NGOs/campaigns (`/api/ngos/:id/flag-request`, `/api/campaigns/:id/flag-request`).
-  - Admin reviews and resolves requests (`/api/admin/flag-requests`).
-- Messaging:
-  - User-to-NGO and NGO-to-user messaging (`/api/messages/*`) with conversation threads and unread counts.
-- Admin flow:
-  - NGO verification/rejection.
-  - Flags moderation and resolution.
-  - Broadcast notifications and analytics endpoints.
-
-## Database Design (PostgreSQL)
-
-### ID Strategy
-- `id BIGSERIAL` is the internal relational primary key.
-- `external_id TEXT UNIQUE` is the API-facing stable ID.
-- `source_doc JSONB` stores full API payload compatibility.
-- `created_at` and `updated_at` are maintained on all core tables.
-
-### Main Tables
-- `users_rel`
-- `ngos_rel`
-- `categories_rel`
-- `campaigns_rel`
-- `volunteer_opportunities_rel`
-- `volunteer_applications_rel`
-- `donations_rel`
-- `certificates_rel`
-- `messages_rel`
-- `notifications_rel`
-- `help_requests_rel`
-- `flag_requests_rel`
-- `ai_logs_rel`
-- `webhook_deliveries_rel`
-- `giving_circles_rel`
-- `circle_members_rel`
-- `circle_contributions_rel`
-- `wishlist_items_rel`
-- `in_kind_pledges_rel`
-- `volunteer_shifts_rel`
-- `volunteer_shift_signups_rel`
-- `volunteer_logs_rel`
-- `donor_notes_rel`
-- `donor_segments_rel`
-- `donor_segment_members_rel`
-- `impact_updates_rel`
-- `corporate_profiles_rel`
-- `corporate_employee_links_rel`
-- `corporate_matches_rel`
-- `user_rewards_rel`
-- `volunteer_endorsements_rel`
-
-### Join Tables
-- `ngo_categories_rel`
-- `campaign_volunteers_rel`
-- `campaign_volunteer_registrations_rel`
-- `opportunity_applicants_rel`
-
-### Core Relationships
-- Campaigns belong to NGOs.
-- Donations link users, campaigns, and NGOs.
-- Volunteer applications link users, opportunities, and NGOs.
-- Certificates link to donation or volunteer-completion records.
-- Requests, messages, notifications, and flags link to user/admin actors.
-
-### Query Semantics
-- Route-level filtering and update behavior has been moved toward explicit PostgreSQL logic.
-- SQL joins and JSONB expressions are used where route filters need richer selection.
-- Mongo-style query/update operators are not used in route handlers for the newer Postgres-native paths.
-
-## Setup
-
-### Prerequisites
-1. Node.js LTS
-2. PostgreSQL 14+
-3. npm
-
-### Backend Env (`backend/.env`)
-
-```env
-PORT=5001
-POSTGRES_URL=postgresql://<user>:<password>@localhost:5432/ngo_connect
-JWT_SECRET=<strong-secret>
-GEMINI_API_KEY=<optional>
-PAYMENT_GATEWAY_PROVIDER=mock
-# Optional for Razorpay
-# RAZORPAY_KEY_ID=<key>
-# RAZORPAY_KEY_SECRET=<secret>
-# Optional SMTP (campaign-update email delivery)
-# MAIL_HOST=smtp.example.com
-# MAIL_PORT=587
-# MAIL_SECURE=false
-# MAIL_USER=<smtp-user>
-# MAIL_PASS=<smtp-pass>
-# MAIL_FROM="NGO Connect <no-reply@example.com>"
-# FRONTEND_URL=http://localhost:3000
-# Optional outbound webhook delivery
-# WEBHOOK_ENABLED=true
-# WEBHOOK_URL=http://localhost:9000/webhooks/ngo-connect
-# WEBHOOK_SECRET=<shared-signing-secret>
-# WEBHOOK_TIMEOUT_MS=5000
-# WEBHOOK_RETRIES=1
-# WEBHOOK_EVENTS=campaign.update.created,notification.engagement
-# WEBHOOK_MAX_AGE_SECONDS=300
-# WEBHOOK_AUTO_RETRY_ENABLED=true
-# WEBHOOK_AUTO_RETRY_INTERVAL_MS=60000
-# WEBHOOK_AUTO_RETRY_BATCH_SIZE=5
-# WEBHOOK_AUTO_RETRY_ATTEMPTS=1
-# WEBHOOK_AUTO_RETRY_BACKOFF_BASE_MS=60000
-# WEBHOOK_AUTO_RETRY_BACKOFF_MAX_MS=1800000
-# WEBHOOK_DEAD_LETTER_ALERT_ENABLED=true
-# WEBHOOK_DEAD_LETTER_ALERT_THRESHOLD=5
-# WEBHOOK_DEAD_LETTER_ALERT_COOLDOWN_MS=900000
-# WEBHOOK_DEAD_LETTER_ALERT_SAMPLE_SIZE=5
-# WEBHOOK_ALERT_EMAIL_TO=ops@example.com
-# WEBHOOK_ALERT_SLACK_URL=https://hooks.slack.com/services/XXX/YYY/ZZZ
-# WEBHOOK_CLEANUP_DAYS=30
-# WEBHOOK_CLEANUP_LIMIT=2000
-# WEBHOOK_CLEANUP_DRY_RUN=true
-# WEBHOOK_CLEANUP_STATUSES=delivered,skipped,replayed_success
+```text
+React SPA (frontend)
+  -> Axios API client with JWT interceptor
+Express API (backend)
+  -> Routes, middleware, service layer
+PostgreSQL
+  -> Relational tables (*_rel) + indexed operational data
 ```
 
-### Frontend Env (`frontend/.env`)
+Key patterns used:
+
+- Route-level role authorization middleware.
+- Service abstraction for payments, mail delivery, and webhooks.
+- Script-first operational tooling for migrations, seeding, smoke checks, and scenarios.
+
+## Repository Structure
+
+```text
+Ngo-Connect/
+|-- backend/
+|   |-- sql/                      # Schema and migration SQL
+|   |-- scripts/                  # Smoke/scenario/ops scripts
+|   |-- src/
+|   |   |-- middleware/           # Auth and role checks
+|   |   |-- models/               # DB model wrappers
+|   |   |-- routes/               # API route modules
+|   |   |-- services/             # External provider integrations
+|   |   `-- utils/                # Shared helpers (mailer, scoring, etc.)
+|   |-- seed.js                   # Seed data generator
+|   `-- README.md                 # Backend-focused deep documentation
+|-- frontend/
+|   |-- src/
+|   |   |-- components/
+|   |   |-- pages/
+|   |   |-- services/
+|   |   `-- utils/
+|   `-- README.md                 # Frontend-focused deep documentation
+|-- docs/
+|   |-- organized/documents/      # Presentations and project docs
+|   `-- test-reports/             # Generated test and scenario reports
+`-- README.md
+```
+
+## Local Setup
+
+### 1. Prerequisites
+
+Install the following before starting:
+
+- Node.js 18+ and npm
+- PostgreSQL 14+ (or any compatible local instance)
+- `psql` CLI available in your shell
+
+### 2. Clone and Install Dependencies
+
+```bash
+git clone <your-repo-url>
+cd Ngo-Connect
+npm --prefix backend install
+npm --prefix frontend install
+```
+
+### 3. Configure Backend Environment
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Update `backend/.env` with at least:
+
+- `POSTGRES_URL` (or `DATABASE_URL`)
+- `JWT_SECRET`
+- optional mail/payment/webhook keys
+
+### 4. Configure Frontend Environment
+
+```bash
+cp frontend/.env.example frontend/.env
+```
+
+Default API URL value:
 
 ```env
 REACT_APP_API_URL=http://localhost:5001/api
 ```
 
-### Install + Run
+### 5. Create Schema and Seed Data
+
+From repository root:
 
 ```bash
-# backend
-cd backend
-npm install
-npm run db:relational-schema
-npm run seed
-npm run dev
-
-# frontend (new terminal)
-cd ../frontend
-npm install
-npm start
+npm --prefix backend run db:relational-schema
+npm --prefix backend run seed
 ```
 
-`npm run seed` performs a deadlock-safe full relational reset (`TRUNCATE ... RESTART IDENTITY CASCADE` on all `*_rel` tables) before inserting fresh sample data.
-It now also seeds each NGO with:
-- `members` (name, role, tasks completed, contribution summary, tasks list, randomly assigned campaign mappings with campaign IDs/titles, and badges)
-- `teamStrengthList` (role-wise member counts and contribution summaries)
-- NGO dashboard-friendly member metadata used by the `Members & Team List` panel
-- task-based monthly badges, including `Member of the Month (...)` for top task performers in each NGO
-
-### Command Reference
+Optional feature migrations (if needed for your DB state):
 
 ```bash
-# Backend
-cd backend
-npm run dev
-npm run start
-npm run seed
-npm run smoke
-npm run scenario:flood
-npm run scenario:roles
-npm run smoke:webhook
-npm run smoke:webhook:worker
-npm run webhook:worker:tick
-npm run webhook:cleanup
-npm run db:relational-schema
-npm run db:migrate:webhooks
-npm run db:migrate:innovation
-
-# Frontend
-cd frontend
-npm start
-npm run build
-npm test
+npm --prefix backend run db:migrate:webhooks
+npm --prefix backend run db:migrate:innovation
 ```
 
-### Research Paper Pipeline (IEEE)
+## Run the Project
 
-Updated paper assets are generated with Python and compiled with LaTeX:
+Open two terminals from repository root.
+
+### Terminal 1: Backend
 
 ```bash
-# from repo root
-python3 generate_paper_figures.py
-python3 generate_paper.py
-pdflatex -interaction=nonstopmode ngo_connect_paper.tex
-pdflatex -interaction=nonstopmode ngo_connect_paper.tex
+npm --prefix backend run dev
 ```
 
-Outputs:
-- `ngo_connect_paper.tex` (updated IEEE paper source)
-- `ngo_connect_paper.pdf` (compiled paper)
-- `figures/paper_metrics.json` (source-derived metrics)
-- generated diagrams/charts in `figures/`:
-  - `system_architecture.png`
-  - `endpoint_distribution.png`
-  - `innovation_feature_matrix.png`
-  - `payment_sequence.png`
-  - `webhook_lifecycle.png`
-  - `smoke_latency_breakdown.png`
-  - `scalability_latency.png`
+Backend default URL: `http://localhost:5001`
 
-### GitHub Update Workflow
+### Terminal 2: Frontend
 
 ```bash
-# from repo root
-git add README.md generate_paper.py generate_paper_figures.py ngo_connect_paper.tex ngo_connect_paper.pdf figures/
-git commit -m "Update IEEE research paper, diagrams, and README pipeline"
-git push origin <your-branch>
+npm --prefix frontend start
 ```
 
-### API Smoke Test
+Frontend default URL: `http://localhost:3000`
 
-With the backend running and a seeded database, run:
+## Default Seed Accounts
 
-```bash
-cd backend
-npm run smoke
-npm run smoke:webhook
-npm run smoke:webhook:worker
-npm run webhook:worker:tick
-npm run webhook:cleanup
-npm run db:migrate:innovation
-npm run scenario:flood
-npm run scenario:roles
-```
+After `npm --prefix backend run seed`:
 
-Apply Phase 5 webhook migration without resetting all tables:
-
-```bash
-cd backend
-npm run db:migrate:webhooks
-```
-
-Optional: override API base and credentials via env vars:
-- `API_BASE` (default: `http://localhost:5001/api`)
-- `SMOKE_USER_EMAIL`, `SMOKE_NGO_EMAIL`, `SMOKE_ADMIN_EMAIL` (passwords also supported)
-
-Optional flood scenario sizing env vars:
-- `FLOOD_USER_COUNT`
-- `FLOOD_NGO_COUNT`
-- `FLOOD_CAMPAIGNS_PER_NGO`
-- `FLOOD_OPPORTUNITIES_PER_NGO`
-- `FLOOD_WISHLIST_ITEMS_PER_NGO`
-- `FLOOD_SHIFTS_PER_NGO`
-- `FLOOD_MEMBERS_PER_ROLE`
-
-## Analytics Notes
-- `Open Rate` / `Click Rate` depend on engagement events captured via:
-  - `POST /api/notifications/:id/open`
-- `Email Delivery` depends on SMTP runtime configuration in `backend/.env`:
-  - `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASS`, optional `MAIL_FROM`
-- If SMTP is missing, dashboard may show:
-  - non-zero `attempts`
-  - zero `sent`
-  - `Email Delivery = 0.0%`
-
-## Seed Credentials (Local)
 - Admin: `admin@ngoconnect.org` / `password123`
 - User: `rahul@example.com` / `password123`
-- NGO: `akshayapatra@ngo.org` / `password123`
+- NGO: first seeded NGO account (printed by seed script) / `password123`
 
-## API Surface Summary
-- Authentication and profile: `/api/auth`, `/api/users`
-- NGO and campaigns: `/api/ngos`, `/api/campaigns`
-- NGO team members (NGO-auth only): `/api/ngos/me/members` (returns tasks, campaign assignments, and badges)
-- Donations, volunteering, certificates: `/api/donations`, `/api/volunteering`, `/api/certificates`
-- Communication and operations: `/api/messages`, `/api/notifications`, `/api/requests`
-- Platform admin and intelligence: `/api/admin`, `/api/ai`, `/api/categories`
-- Innovation and trust: `/api/innovation`, `/api/ngos/:id/transparency`
-- Campaign update analytics and tracking:
-  - `/api/campaigns/:id/updates`
-  - `/api/campaigns/:id/updates/analytics`
-  - `/api/campaigns/ngo/campaign-updates/analytics`
-  - `/api/notifications/:id/open`
-- Webhook operations:
-  - `/api/admin/webhooks`
-  - `/api/admin/webhooks/metrics`
-  - `/api/admin/webhooks/export`
-  - `/api/admin/webhooks/cleanup`
-  - `/api/admin/webhooks/:id/retry`
-  - `/api/admin/webhooks/worker/status`
-  - `/api/admin/webhooks/worker/run`
+## Environment Variables
+
+See `backend/.env.example` for the complete list. Key groups:
+
+- Core: `PORT`, `POSTGRES_URL`, `DATABASE_URL`, `JWT_SECRET`
+- AI: `GEMINI_API_KEY`
+- Payments: `PAYMENT_GATEWAY_PROVIDER`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`
+- Email: SMTP (`MAIL_*`) or Resend (`RESEND_*`)
+- Webhooks: `WEBHOOK_*` settings
+- Auto-retry/alerting/cleanup: `WEBHOOK_AUTO_RETRY_*`, `WEBHOOK_DEAD_LETTER_*`, `WEBHOOK_CLEANUP_*`
+
+## Email Delivery Metrics (Resend)
+
+To make campaign update email analytics move above `0.0%`, valid outbound email delivery must succeed.
+
+Use this in `backend/.env`:
+
+```env
+MAIL_PROVIDER=resend
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
+RESEND_FROM="NGO Connect <onboarding@resend.dev>"
+RESEND_REPLY_TO=support@yourdomain.com
+RESEND_TIMEOUT_MS=10000
+RESEND_API_URL=https://api.resend.com
+```
+
+Then restart backend and publish a new campaign update.
+
+Important requirements:
+
+- `RESEND_API_KEY` must be valid (not placeholder).
+- Sender/domain in `RESEND_FROM` must be allowed by your Resend account rules.
+- If delivery is accepted, analytics counters like `emailSent` increase and Email Delivery % rises.
+
+## Important API Areas
+
+Main route groups mounted under `/api`:
+
+- `auth`
+- `users`
+- `ngos`
+- `campaigns`
+- `donations`
+- `volunteering`
+- `messages`
+- `notifications`
+- `admin`
+- `ai`
+- `innovation`
+
+Examples related to campaign updates and analytics:
+
+- `POST /api/campaigns/:id/updates`
+- `GET /api/campaigns/:id/updates/analytics`
+- `GET /api/campaigns/ngo/campaign-updates/analytics`
+- `POST /api/notifications/:id/open`
+
+## Scripts and Utilities
+
+### Backend scripts
+
+```bash
+npm --prefix backend run start
+npm --prefix backend run dev
+npm --prefix backend run seed
+npm --prefix backend run smoke
+npm --prefix backend run smoke:webhook
+npm --prefix backend run smoke:webhook:worker
+npm --prefix backend run webhook:worker:tick
+npm --prefix backend run webhook:cleanup
+npm --prefix backend run scenario:flood
+npm --prefix backend run scenario:roles
+npm --prefix backend run scenario:verification-interface
+npm --prefix backend run scenario:detailed-ngos
+npm --prefix backend run data:curate:bangalore
+npm --prefix backend run test:fraud
+```
+
+### Frontend scripts
+
+```bash
+npm --prefix frontend start
+npm --prefix frontend run build
+npm --prefix frontend test
+```
 
 ## Troubleshooting
-- `404` on donation/payment endpoints:
-  - Confirm frontend uses `REACT_APP_API_URL=http://localhost:5001/api`.
-  - Confirm backend is running on port `5001`.
-- DB connection failures:
-  - Verify `POSTGRES_URL` and ensure PostgreSQL is running.
-  - Re-run `npm run db:relational-schema` and `npm run seed`.
-- Auth failures:
-  - Ensure `JWT_SECRET` is set and stable across backend restarts.
-  - Re-login after backend auth changes.
 
-## Notes
-- Legacy Mongo/Mongoose runtime dependencies are not required for the current backend runtime.
-- If old `MONGO_*` variables exist in local env files, they are not used by the active server code.
+### Campaign analytics shows 0 recipients
+
+Cause:
+
+- No completed donor records tied to targeted campaigns yet.
+
+Action:
+
+- Complete at least one donation record for campaign recipients, then publish a new update.
+
+### Email attempts increase but sent stays 0
+
+Cause:
+
+- Mail provider config invalid, missing, or rejected sender/domain.
+
+Action:
+
+- Validate `MAIL_PROVIDER` config.
+- Verify `RESEND_API_KEY` or SMTP credentials.
+- Confirm sender identity in provider dashboard.
+
+### Frontend cannot reach backend
+
+Cause:
+
+- API URL mismatch or backend not running.
+
+Action:
+
+- Confirm backend is running on `http://localhost:5001`.
+- Check `frontend/.env` value for `REACT_APP_API_URL`.
+
+## Task 2 Screenshots
+
+Latest UI screenshots captured on March 10, 2026:
+
+### Home
+
+![Home Typography Refresh](docs/test-reports/typography_home_20260310.png)
+
+### Login
+
+![Login Typography Refresh](docs/test-reports/typography_login_20260310.png)
+
+### User Dashboard
+
+![User Dashboard Typography Refresh](docs/test-reports/typography_dashboard_user_20260310.png)
+
+### NGO Dashboard
+
+![NGO Dashboard Typography Refresh](docs/test-reports/typography_dashboard_ngo_20260310.png)
+
+### Admin Dashboard
+
+![Admin Dashboard Typography Refresh](docs/test-reports/typography_dashboard_admin_20260310.png)
+
+### Map and Navbar Verification
+
+![Map Navbar Verification](docs/test-reports/map_navbar_verification_20260310_v2.png)
+
+## Reports and Presentation Assets
+
+- Generated validation and scenario reports: `docs/test-reports/`
+- Architecture presentation: `docs/organized/documents/NGO_Connect_Architecture_Presentation.pptx`
+- Presentation generator script: `generate_presentation.py`
+
+For module-specific details, refer to:
+
+- `backend/README.md`
+- `frontend/README.md`

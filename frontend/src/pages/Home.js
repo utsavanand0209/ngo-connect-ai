@@ -33,7 +33,7 @@ export default function Home() {
       {/* Hero Section */}
       <header className="relative bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-20 px-4 text-center">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight">
+          <h1 className="text-display text-5xl md:text-6xl font-extrabold tracking-tight">
             Connect with a Cause
           </h1>
           <p className="mt-4 text-lg md:text-xl opacity-90">

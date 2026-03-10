@@ -307,34 +307,6 @@ export default function AdminDashboard() {
     return sorted.slice(0, 15);
   }, [snapshot, campaignVolunteerQuery]);
 
-  const handleVerifyNgo = async (ngoId) => {
-    if (!ngoId) return;
-    const key = `verify-${ngoId}`;
-    setActionState((prev) => ({ ...prev, [key]: true }));
-    try {
-      await api.post(`/admin/verify-ngo/${ngoId}`);
-      await fetchSnapshot({ noCache: true });
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to verify NGO.');
-    } finally {
-      setActionState((prev) => ({ ...prev, [key]: false }));
-    }
-  };
-
-  const handleRejectNgo = async (ngoId) => {
-    if (!ngoId) return;
-    const key = `reject-${ngoId}`;
-    setActionState((prev) => ({ ...prev, [key]: true }));
-    try {
-      await api.post(`/admin/reject-ngo/${ngoId}`);
-      await fetchSnapshot({ noCache: true });
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to reject NGO.');
-    } finally {
-      setActionState((prev) => ({ ...prev, [key]: false }));
-    }
-  };
-
   const handleResolveFlag = async (type, id) => {
     if (!type || !id) return;
     const key = `resolve-${type}-${id}`;
@@ -520,12 +492,12 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8">
+    <div className="role-dashboard role-admin">
+      <div className="role-dashboard__inner">
+        <header className="role-hero mb-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Admin Control Room</h1>
+              <h1 className="text-display text-4xl font-extrabold text-slate-900 tracking-tight">Admin Control Room</h1>
               <p className="text-slate-600 mt-1">
                 Live platform pulse: campaigns, donations, volunteer activity, and moderation queues.
               </p>
@@ -576,31 +548,31 @@ export default function AdminDashboard() {
         )}
 
         <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
-          <div className="bg-white/90 backdrop-blur rounded-xl border border-slate-200 shadow-sm p-5">
+          <div className="role-stat-card">
             <p className="text-xs font-semibold tracking-wide uppercase text-slate-500">Donations (Completed)</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-2">{formatINR(stats.donationsCompletedTotal)}</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-2 text-metric">{formatINR(stats.donationsCompletedTotal)}</p>
             <p className="text-sm text-slate-600 mt-1">{formatCount(stats.donationsCompletedCount)} transactions</p>
           </div>
-          <div className="bg-white/90 backdrop-blur rounded-xl border border-slate-200 shadow-sm p-5">
+          <div className="role-stat-card">
             <p className="text-xs font-semibold tracking-wide uppercase text-slate-500">Volunteer Registrations</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-2">{formatCount(stats.volunteerApplicationsCount)}</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-2 text-metric">{formatCount(stats.volunteerApplicationsCount)}</p>
             <p className="text-sm text-slate-600 mt-1">{formatCount(stats.volunteerCompletedCount)} completed</p>
           </div>
-          <div className="bg-white/90 backdrop-blur rounded-xl border border-slate-200 shadow-sm p-5">
+          <div className="role-stat-card">
             <p className="text-xs font-semibold tracking-wide uppercase text-slate-500">Moderation</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-2">{formatCount(stats.flaggedTotal)}</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-2 text-metric">{formatCount(stats.flaggedTotal)}</p>
             <p className="text-sm text-slate-600 mt-1">
               NGOs: {formatCount(stats.flaggedNgos)} • Campaigns: {formatCount(stats.flaggedCampaigns)}
             </p>
           </div>
-          <div className="bg-white/90 backdrop-blur rounded-xl border border-slate-200 shadow-sm p-5">
+          <div className="role-stat-card">
             <p className="text-xs font-semibold tracking-wide uppercase text-slate-500">Queues</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-2">{formatCount(stats.pendingNgos)}</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-2 text-metric">{formatCount(stats.pendingNgos)}</p>
             <p className="text-sm text-slate-600 mt-1">Pending NGO verifications</p>
           </div>
-          <div className="bg-white/90 backdrop-blur rounded-xl border border-slate-200 shadow-sm p-5">
+          <div className="role-stat-card">
             <p className="text-xs font-semibold tracking-wide uppercase text-slate-500">Webhook Dead-Letter</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-2">{formatCount(stats.webhookDeadLetterCount)}</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-2 text-metric">{formatCount(stats.webhookDeadLetterCount)}</p>
             <p className="text-sm text-slate-600 mt-1">
               {formatCount(stats.webhookDeliveredCount)} delivered / {formatCount(stats.webhookDeliveriesTotal)} total
             </p>
@@ -608,7 +580,7 @@ export default function AdminDashboard() {
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <div className="role-panel p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Donations Pulse (Daily)</h2>
@@ -632,7 +604,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <div className="role-panel p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Volunteer Pulse (Daily)</h2>
@@ -657,7 +629,7 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+        <section className="role-panel p-5 mb-6">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-xl font-extrabold text-slate-900">Webhook Dead-Letter Queue</h2>
@@ -885,7 +857,7 @@ export default function AdminDashboard() {
         </section>
 
         <section className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 xl:col-span-2">
+          <div className="role-panel p-5 xl:col-span-2">
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div>
                 <h2 className="text-xl font-extrabold text-slate-900">Campaign Progress</h2>
@@ -994,15 +966,20 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <div className="role-panel p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-extrabold text-slate-900">Moderation Queue</h2>
-                <p className="text-sm text-slate-600 mt-1">Resolve flags and verify pending NGOs.</p>
+                <p className="text-sm text-slate-600 mt-1">Resolve flags and open detailed NGO verification review.</p>
               </div>
-              <Link to="/admin/flagged-content" className="text-sm font-semibold text-slate-900 hover:underline">
+              <a
+                href="/admin/verifications?status=pending"
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-semibold text-slate-900 hover:underline"
+              >
                 Open
-              </Link>
+              </a>
             </div>
 
             <div className="mt-4">
@@ -1013,31 +990,32 @@ export default function AdminDashboard() {
 
               <div className="mt-3 space-y-3">
                 {(snapshot?.pendingNgos || []).slice(0, 5).map((ngo) => {
-                  const verifyKey = `verify-${ngo.id}`;
-                  const rejectKey = `reject-${ngo.id}`;
+                  const ngoVerificationHref = ngo.id
+                    ? `/admin/verifications?status=pending&ngoId=${encodeURIComponent(ngo.id)}`
+                    : '/admin/verifications?status=pending';
                   return (
                     <div key={ngo.id} className="rounded-lg border border-slate-200 p-3">
-                      <p className="font-semibold text-slate-900">{ngo.name || 'NGO'}</p>
+                      <a
+                        href={ngoVerificationHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold text-slate-900 hover:underline"
+                      >
+                        {ngo.name || 'NGO'}
+                      </a>
                       <p className="text-xs text-slate-600 mt-0.5">{ngo.email || 'No email'}</p>
                       <p className="text-xs text-slate-500 mt-1">Submitted: {when(ngo.createdAt)}</p>
-                      <div className="mt-3 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleVerifyNgo(ngo.id)}
-                          disabled={Boolean(actionState[verifyKey] || actionState[rejectKey])}
-                          className="px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-60"
-                        >
-                          {actionState[verifyKey] ? 'Verifying…' : 'Verify'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRejectNgo(ngo.id)}
-                          disabled={Boolean(actionState[verifyKey] || actionState[rejectKey])}
-                          className="px-3 py-1.5 rounded-md bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 disabled:opacity-60"
-                        >
-                          {actionState[rejectKey] ? 'Rejecting…' : 'Reject'}
-                        </button>
-                      </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Open full profile, documents, checklist, and history before taking a decision.
+                      </p>
+                      <a
+                        href={ngoVerificationHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 inline-flex items-center px-3 py-1.5 rounded-md bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
+                      >
+                        Open Detailed Verification
+                      </a>
                     </div>
                   );
                 })}
@@ -1051,7 +1029,12 @@ export default function AdminDashboard() {
             </div>
 
             <div className="mt-6">
-              <h3 className="text-sm font-bold text-slate-900">Flagged Items</h3>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-bold text-slate-900">Flagged Items</h3>
+                <Link to="/admin/flagged-content" className="text-xs font-semibold text-slate-700 hover:underline">
+                  Open Flagged Content
+                </Link>
+              </div>
               <p className="text-xs text-slate-500 mt-1">
                 NGOs: {formatCount(stats.flaggedNgos)} • Campaigns: {formatCount(stats.flaggedCampaigns)}
               </p>
@@ -1248,7 +1231,7 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+        <section className="role-panel p-5 mb-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 className="text-xl font-extrabold text-slate-900">Donation Registrations</h2>
@@ -1326,7 +1309,7 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+        <section className="role-panel p-5 mb-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 className="text-xl font-extrabold text-slate-900">Volunteer Registrations</h2>
@@ -1400,7 +1383,7 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+        <section className="role-panel p-5 mb-6">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-xl font-extrabold text-slate-900">Support Requests</h2>
@@ -1470,7 +1453,7 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+        <section className="role-panel p-5 mb-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 className="text-xl font-extrabold text-slate-900">Campaign Volunteer Registrations</h2>
@@ -1551,45 +1534,45 @@ export default function AdminDashboard() {
           )}
         </section>
 
-        <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <section className="role-panel p-6">
           <h2 className="text-xl font-extrabold text-slate-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            <Link to="/admin/verifications" className="rounded-xl border border-slate-200 p-4 hover:bg-slate-50 transition">
+            <Link to="/admin/verifications" className="role-soft-link">
               <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Verification</p>
               <p className="mt-2 font-bold text-slate-900">Review NGO Verifications</p>
               <p className="text-sm text-slate-600 mt-1">{formatCount(stats.pendingNgos)} pending</p>
             </Link>
-            <Link to="/admin/flagged-content" className="rounded-xl border border-slate-200 p-4 hover:bg-slate-50 transition">
+            <Link to="/admin/flagged-content" className="role-soft-link">
               <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Moderation</p>
               <p className="mt-2 font-bold text-slate-900">Review Flagged Content</p>
               <p className="text-sm text-slate-600 mt-1">{formatCount(stats.flaggedTotal)} total flagged</p>
             </Link>
-            <Link to="/admin/users" className="rounded-xl border border-slate-200 p-4 hover:bg-slate-50 transition">
+            <Link to="/admin/users" className="role-soft-link">
               <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Users</p>
               <p className="mt-2 font-bold text-slate-900">Manage Users</p>
               <p className="text-sm text-slate-600 mt-1">{formatCount(stats.usersTotal)} users</p>
             </Link>
-            <Link to="/admin/requests" className="rounded-xl border border-slate-200 p-4 hover:bg-slate-50 transition">
+            <Link to="/admin/requests" className="role-soft-link">
               <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Support</p>
               <p className="mt-2 font-bold text-slate-900">Review Support Requests</p>
               <p className="text-sm text-slate-600 mt-1">{formatCount(stats.requestsTotal)} total</p>
             </Link>
-            <Link to="/admin/notifications" className="rounded-xl border border-slate-200 p-4 hover:bg-slate-50 transition">
+            <Link to="/admin/notifications" className="role-soft-link">
               <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Broadcast</p>
               <p className="mt-2 font-bold text-slate-900">Send Notifications</p>
               <p className="text-sm text-slate-600 mt-1">To users/NGOs</p>
             </Link>
-            <Link to="/admin/categories" className="rounded-xl border border-slate-200 p-4 hover:bg-slate-50 transition">
+            <Link to="/admin/categories" className="role-soft-link">
               <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Catalog</p>
               <p className="mt-2 font-bold text-slate-900">Manage Categories</p>
               <p className="text-sm text-slate-600 mt-1">{formatCount(stats.categoriesTotal)} categories</p>
             </Link>
-            <Link to="/ngos" className="rounded-xl border border-slate-200 p-4 hover:bg-slate-50 transition">
+            <Link to="/ngos" className="role-soft-link">
               <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Public</p>
               <p className="mt-2 font-bold text-slate-900">Browse NGO Directory</p>
               <p className="text-sm text-slate-600 mt-1">Spot-check listings</p>
             </Link>
-            <Link to="/campaigns" className="rounded-xl border border-slate-200 p-4 hover:bg-slate-50 transition">
+            <Link to="/campaigns" className="role-soft-link">
               <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Public</p>
               <p className="mt-2 font-bold text-slate-900">Browse Campaigns</p>
               <p className="text-sm text-slate-600 mt-1">Review progress and content</p>

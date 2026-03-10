@@ -395,15 +395,37 @@ router.post('/me/members', auth(['ngo']), async (req, res) => {
 // Upload verification docs
 router.post('/me/verify', auth(['ngo']), upload.array('docs', 5), async (req, res) => {
   try {
-    const paths = req.files.map(f => f.path);
+    const uploadedFiles = Array.isArray(req.files) ? req.files : [];
+    if (uploadedFiles.length === 0) {
+      return res.status(400).json({ message: 'Upload at least one verification document.' });
+    }
+
+    const paths = uploadedFiles.map((file) => file.path).filter(Boolean);
     const ngo = await NGO.findById(req.user.id);
     if (!ngo) return res.status(404).json({ message: 'NGO not found' });
 
     const existingDocs = Array.isArray(ngo.verificationDocs) ? ngo.verificationDocs : [];
     ngo.verificationDocs = [...existingDocs, ...paths];
+    ngo.verified = false;
+    ngo.verificationStatus = 'pending';
+    ngo.verificationReviewedAt = null;
+    ngo.verificationReviewedBy = null;
+    ngo.verificationRejectionReason = null;
+    ngo.verificationRejectionSuggestions = null;
+
+    const history = Array.isArray(ngo.verificationHistory) ? ngo.verificationHistory : [];
+    history.unshift({
+      id: generateId(),
+      action: 'resubmitted',
+      decidedAt: new Date().toISOString(),
+      decidedBy: req.user.id,
+      note: `NGO uploaded ${paths.length} verification document(s).`
+    });
+    ngo.verificationHistory = history.slice(0, 50);
+
     await ngo.save();
 
-    res.json({ message: 'Documents uploaded', ngo: sanitizeNgo(ngo) });
+    res.json({ message: 'Documents uploaded. Verification status moved to pending review.', ngo: sanitizeNgo(ngo) });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }

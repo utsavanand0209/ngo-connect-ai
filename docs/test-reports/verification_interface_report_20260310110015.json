@@ -1,0 +1,72 @@
+{
+  "runId": "20260310110015",
+  "timestamp": "2026-03-10T11:00:15.564Z",
+  "apiBase": "http://localhost:5001/api",
+  "status": "passed",
+  "ngo": {
+    "id": "c9a3d206-c14d-4559-afc1-dda1bab68e98",
+    "email": "verification.scenario.20260310110015@example.com",
+    "name": "Verification Scenario NGO 20260310110015"
+  },
+  "assertions": [
+    "Registered NGO appears in queue with pending status.",
+    "Checklist enforcement blocks verification for incomplete NGO profile.",
+    "Rejection endpoint stores rejected status with feedback.",
+    "NGO resubmission returns status to pending.",
+    "Admin verification succeeds after checklist conditions are met.",
+    "Verification history contains rejected and approved decisions.",
+    "Admin + NGO notifications are generated for verification decisions."
+  ],
+  "steps": [
+    {
+      "name": "Login as admin",
+      "status": "passed",
+      "durationMs": 410
+    },
+    {
+      "name": "Register scenario NGO",
+      "status": "passed",
+      "durationMs": 352
+    },
+    {
+      "name": "Login as scenario NGO",
+      "status": "passed",
+      "durationMs": 155
+    },
+    {
+      "name": "Load admin verification queue",
+      "status": "passed",
+      "durationMs": 19
+    },
+    {
+      "name": "Verify with checklist enforcement before docs (expected fail)",
+      "status": "passed",
+      "durationMs": 79
+    },
+    {
+      "name": "Reject NGO with reason and suggestions",
+      "status": "passed",
+      "durationMs": 85
+    },
+    {
+      "name": "NGO uploads verification document (resubmission)",
+      "status": "passed",
+      "durationMs": 11
+    },
+    {
+      "name": "Verify NGO after resubmission",
+      "status": "passed",
+      "durationMs": 6
+    },
+    {
+      "name": "Queue includes verification history entries",
+      "status": "passed",
+      "durationMs": 82
+    },
+    {
+      "name": "Notifications are accessible for admin and NGO",
+      "status": "passed",
+      "durationMs": 5
+    }
+  ]
+}

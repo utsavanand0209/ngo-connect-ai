@@ -1,10 +1,428 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600&family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body { @apply bg-gray-50 text-gray-800; }
+:root {
+  --font-body: 'Manrope', 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --font-display: 'Sora', 'Manrope', 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  --brand-50: #f0f7ff;
+  --brand-100: #d9e9ff;
+  --brand-300: #93c5fd;
+  --brand-500: #3b82f6;
+  --brand-700: #1d4ed8;
+  --surface-shadow: 0 20px 42px -32px rgba(15, 23, 42, 0.45);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  letter-spacing: -0.005em;
+  line-height: 1.6;
+  font-feature-settings: 'ss01' 1, 'cv03' 1, 'cv11' 1;
+  @apply bg-slate-50 text-slate-800 antialiased;
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
+  h1 {
+    line-height: 1.08;
+    font-weight: 800;
+  }
+
+  h2 {
+    line-height: 1.15;
+    font-weight: 700;
+  }
+
+  h3 {
+    line-height: 1.2;
+    font-weight: 700;
+  }
+
+  p,
+  li,
+  label,
+  input,
+  textarea,
+  select,
+  button,
+  a {
+    font-family: var(--font-body);
+  }
+
+  p {
+    line-height: 1.62;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp,
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+}
 
 @layer components {
+  .text-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.025em;
+  }
+
+  .text-kicker {
+    @apply text-xs font-semibold uppercase text-slate-500;
+    letter-spacing: 0.1em;
+  }
+
+  .text-metric {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  .role-dashboard {
+    @apply min-h-screen p-6;
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(16, 185, 129, 0.08), transparent 60%),
+      radial-gradient(900px 500px at 100% -15%, rgba(14, 165, 233, 0.08), transparent 55%),
+      linear-gradient(180deg, #f8fbff 0%, #f3f7fb 45%, #eef3f8 100%);
+  }
+
+  .role-dashboard::before,
+  .role-dashboard::after {
+    content: '';
+    position: absolute;
+    border-radius: 9999px;
+    pointer-events: none;
+    filter: blur(1px);
+    animation: drift-orb 12s ease-in-out infinite;
+  }
+
+  .role-dashboard::before {
+    width: 420px;
+    height: 420px;
+    top: -220px;
+    right: -160px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0) 68%);
+  }
+
+  .role-dashboard::after {
+    width: 360px;
+    height: 360px;
+    bottom: -180px;
+    left: -140px;
+    animation-delay: 1.2s;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0) 70%);
+  }
+
+  .role-dashboard__inner {
+    @apply max-w-7xl mx-auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  .role-dashboard__inner > * {
+    opacity: 0;
+    animation: fade-in-up 0.45s ease-out forwards;
+  }
+
+  .role-dashboard__inner > *:nth-child(1) { animation-delay: 0.04s; }
+  .role-dashboard__inner > *:nth-child(2) { animation-delay: 0.08s; }
+  .role-dashboard__inner > *:nth-child(3) { animation-delay: 0.12s; }
+  .role-dashboard__inner > *:nth-child(4) { animation-delay: 0.16s; }
+  .role-dashboard__inner > *:nth-child(5) { animation-delay: 0.20s; }
+  .role-dashboard__inner > *:nth-child(6) { animation-delay: 0.24s; }
+  .role-dashboard__inner > *:nth-child(7) { animation-delay: 0.28s; }
+  .role-dashboard__inner > *:nth-child(8) { animation-delay: 0.32s; }
+  .role-dashboard__inner > *:nth-child(9) { animation-delay: 0.36s; }
+  .role-dashboard__inner > *:nth-child(10) { animation-delay: 0.40s; }
+  .role-dashboard__inner > *:nth-child(11) { animation-delay: 0.44s; }
+  .role-dashboard__inner > *:nth-child(12) { animation-delay: 0.48s; }
+
+  .role-dashboard.role-user {
+    background:
+      radial-gradient(1000px 560px at -5% -15%, rgba(99, 102, 241, 0.1), transparent 60%),
+      radial-gradient(800px 420px at 105% -10%, rgba(16, 185, 129, 0.1), transparent 55%),
+      linear-gradient(180deg, #f8faff 0%, #f2f6fb 45%, #edf2f8 100%);
+  }
+
+  .role-dashboard.role-ngo {
+    background:
+      radial-gradient(980px 520px at -6% -10%, rgba(5, 150, 105, 0.12), transparent 60%),
+      radial-gradient(760px 380px at 105% -12%, rgba(14, 165, 233, 0.1), transparent 55%),
+      linear-gradient(180deg, #f6fbf9 0%, #f1f8f6 45%, #ebf4f1 100%);
+  }
+
+  .role-dashboard.role-admin {
+    background:
+      radial-gradient(980px 520px at -6% -10%, rgba(15, 23, 42, 0.12), transparent 60%),
+      radial-gradient(760px 380px at 105% -12%, rgba(16, 185, 129, 0.12), transparent 55%),
+      linear-gradient(180deg, #f6f8fb 0%, #eef3f8 50%, #e7eef5 100%);
+  }
+
+  .role-dashboard .role-hero {
+    @apply rounded-2xl border border-slate-200/80 bg-white/85 p-6 md:p-7;
+    box-shadow: var(--surface-shadow);
+    backdrop-filter: blur(8px);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .role-dashboard .role-panel {
+    @apply rounded-2xl border border-slate-200/80 bg-white/90;
+    box-shadow: var(--surface-shadow);
+    backdrop-filter: blur(8px);
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .role-dashboard .role-panel::before,
+  .role-dashboard .role-hero::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 3px;
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.75), rgba(16, 185, 129, 0.45), rgba(14, 165, 233, 0.75));
+    opacity: 0.6;
+  }
+
+  .role-dashboard .role-panel:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 24px 46px -34px rgba(15, 23, 42, 0.55);
+    border-color: rgba(148, 163, 184, 0.5);
+  }
+
+  .role-dashboard .role-panel-title {
+    @apply text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight;
+    font-family: var(--font-display);
+  }
+
+  .role-dashboard .role-panel-subtitle {
+    @apply text-sm text-slate-600 mt-1;
+  }
+
+  .role-dashboard .role-stat-card {
+    @apply rounded-xl border border-slate-200/90 bg-white/95 p-4;
+    box-shadow: 0 12px 28px -24px rgba(15, 23, 42, 0.45);
+    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .role-dashboard .role-stat-card::after {
+    content: '';
+    position: absolute;
+    inset: auto -20% -55% -20%;
+    height: 90px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0) 70%);
+    pointer-events: none;
+  }
+
+  .role-dashboard .role-stat-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(147, 197, 253, 0.8);
+    box-shadow: 0 16px 34px -26px rgba(37, 99, 235, 0.5);
+  }
+
+  .role-dashboard .role-stat-card > p:first-child {
+    @apply text-xs font-semibold uppercase text-slate-500;
+    letter-spacing: 0.095em;
+  }
+
+  .role-dashboard .role-stat-card > p:nth-child(2) {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: -0.02em;
+  }
+
+  .role-dashboard .role-soft-link {
+    @apply rounded-xl border border-slate-200 bg-white/90 p-4 transition;
+    box-shadow: 0 10px 24px -24px rgba(15, 23, 42, 0.45);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .role-dashboard .role-soft-link:hover {
+    @apply border-sky-200 bg-sky-50/50;
+    transform: translateY(-2px);
+    box-shadow: 0 18px 34px -28px rgba(37, 99, 235, 0.5);
+  }
+
+  .role-dashboard .role-soft-link::after {
+    content: '';
+    position: absolute;
+    width: 110px;
+    height: 110px;
+    right: -60px;
+    top: -60px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.11), transparent 68%);
+    transition: transform 220ms ease;
+  }
+
+  .role-dashboard .role-soft-link:hover::after {
+    transform: translate(-8px, 8px) scale(1.05);
+  }
+
+  .role-dashboard table thead {
+    @apply bg-slate-50/90;
+  }
+
+  .role-dashboard table thead th {
+    @apply text-slate-500 font-semibold uppercase;
+    letter-spacing: 0.085em;
+    font-size: 0.72rem;
+  }
+
+  .role-dashboard table tbody tr {
+    @apply border-slate-100 transition;
+  }
+
+  .role-dashboard table tbody tr:hover {
+    background: rgba(239, 246, 255, 0.65);
+  }
+
+  .role-dashboard input,
+  .role-dashboard select,
+  .role-dashboard textarea {
+    @apply border-slate-300;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  .role-dashboard button:focus-visible,
+  .role-dashboard a:focus-visible,
+  .role-dashboard input:focus-visible,
+  .role-dashboard select:focus-visible,
+  .role-dashboard textarea:focus-visible {
+    outline: 2px solid rgba(14, 165, 233, 0.5);
+    outline-offset: 2px;
+  }
+
+  .nav-pro {
+    @apply sticky top-0 border-b border-slate-200/90 bg-white/95;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 22px -20px rgba(15, 23, 42, 0.35);
+    z-index: 3000;
+    isolation: isolate;
+  }
+
+  .nav-inner {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .nav-row {
+    @apply flex items-center justify-between h-16;
+  }
+
+  .nav-brand {
+    @apply inline-flex items-center gap-2 rounded-xl px-2 py-1.5 text-slate-900;
+  }
+
+  .nav-brand-mark {
+    @apply inline-flex items-center justify-center h-7 w-7 rounded-lg text-xs font-extrabold text-white;
+    background: linear-gradient(135deg, #1d4ed8, #2563eb 55%, #0ea5e9);
+    box-shadow: 0 10px 22px -14px rgba(37, 99, 235, 0.8);
+  }
+
+  .nav-brand-text {
+    @apply text-lg font-extrabold tracking-tight;
+    font-family: var(--font-display);
+  }
+
+  .nav-btn {
+    @apply inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 transition;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  }
+
+  .nav-btn:hover {
+    @apply border-slate-300 text-slate-900;
+    box-shadow: 0 10px 18px -16px rgba(15, 23, 42, 0.65);
+    transform: translateY(-1px);
+  }
+
+  .nav-link-inline {
+    @apply rounded-lg px-2.5 py-1.5 text-sm font-semibold text-slate-700 transition;
+  }
+
+  .nav-link-inline:hover {
+    @apply bg-slate-100 text-slate-900;
+  }
+
+  .menu-popover {
+    @apply rounded-xl border border-slate-200 bg-white p-2 shadow-xl;
+    animation: popover-in 0.18s ease-out;
+    transform-origin: top;
+    z-index: 3100;
+    min-width: 14rem;
+  }
+
+  .menu-popover::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    pointer-events: none;
+  }
+
+  .nav-dropdown-link {
+    @apply block rounded-lg px-3 py-2 text-sm font-medium transition;
+  }
+
+  .nav-dropdown-link:hover {
+    @apply bg-slate-100 text-slate-900;
+  }
+
+  .nav-role-badge {
+    @apply inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold tracking-wide uppercase;
+  }
+
+  .nav-role-badge--user {
+    @apply bg-sky-50 text-sky-700 border-sky-200;
+  }
+
+  .nav-role-badge--ngo {
+    @apply bg-emerald-50 text-emerald-700 border-emerald-200;
+  }
+
+  .nav-role-badge--admin {
+    @apply bg-slate-100 text-slate-700 border-slate-300;
+  }
+
+  @keyframes drift-orb {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(0, -14px, 0); }
+  }
+
+  @keyframes popover-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
   @keyframes fade-in-up {
     from {
       opacity: 0;
@@ -18,5 +436,21 @@ body { @apply bg-gray-50 text-gray-800; }
 
   .animate-fade-in-up {
     animation: fade-in-up 0.5s ease-out forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .role-dashboard::before,
+    .role-dashboard::after,
+    .role-dashboard__inner > *,
+    .role-dashboard .role-panel,
+    .role-dashboard .role-stat-card,
+    .role-dashboard .role-soft-link,
+    .menu-popover,
+    .animate-fade-in-up {
+      animation: none !important;
+      transition: none !important;
+      transform: none !important;
+      opacity: 1 !important;
+    }
   }
 }

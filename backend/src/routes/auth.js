@@ -50,6 +50,8 @@ router.post('/register', async (req, res) => {
         password: hashed,
         role: 'ngo',
         verified: false,
+        verificationStatus: 'pending',
+        verificationHistory: [],
         flagged: false,
         isActive: true,
         registrationId,

@@ -15,6 +15,7 @@ const {
   buildPrompt,
   buildFallbackReply
 } = require('../utils/supportChat');
+const { computeFraudScore, FRAUD_THRESHOLD } = require('../utils/fraudScore');
 
 // Initialize Google Generative AI
 let genAI;
@@ -766,21 +767,19 @@ router.post('/chat', async (req, res) => {
 // Fraud scoring
 router.post('/fraud-score', async (req, res) => {
   try {
-    const { ngoId } = req.body;
+    const ngoId = String(req.body?.ngoId || '').trim();
+    if (!ngoId) {
+      return res.status(400).json({ message: 'ngoId is required' });
+    }
+
     const ngo = await NGO.findById(ngoId);
     if (!ngo) return res.status(404).json({ message: 'NGO not found' });
-    let score = 0;
-    if (!ngo.verificationDocs || ngo.verificationDocs.length === 0) score += 40;
-    const ageDays = (Date.now() - new Date(ngo.createdAt).getTime()) / (1000 * 3600 * 24);
-    if (ageDays < 30) score += 20;
-    if ((ngo.description || '').toLowerCase().match(/urgent|donate now|click here/)) score += 30;
-    // mock high donation goal detection via campaigns
+
     const campaigns = await Campaign.find({ ngo: ngo.id });
-    const highGoal = campaigns.some(c => (c.goalAmount || 0) >= 100000);
-    if (highGoal) score += 20;
-    const flagged = score >= 50;
+    const { score, flagged, checks } = computeFraudScore({ ngo, campaigns });
+
     await AILog.create({ type: 'fraud', payload: { ngoId }, result: { score, flagged } });
-    res.json({ score, flagged });
+    res.json({ score, flagged, threshold: FRAUD_THRESHOLD, checks });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }

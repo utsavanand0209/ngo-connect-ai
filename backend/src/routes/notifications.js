@@ -61,7 +61,10 @@ router.get('/', auth(['user', 'ngo', 'admin']), async (req, res) => {
 
     const principalId = String(req.user.id || '');
     const notifications = rows
-      .map((row) => mapRowDoc(row))
+      .map((row) => ({
+        ...mapRowDoc(row),
+        externalId: String(row?.external_id || '')
+      }))
       .filter((note) => canAccessNotification(note, role, principalId))
       .slice(0, limit);
 
@@ -87,6 +90,8 @@ router.post('/:id/open', auth(['user', 'ngo', 'admin']), async (req, res) => {
       SELECT external_id, source_doc
       FROM notifications_rel
       WHERE external_id = $1
+         OR source_doc->>'id' = $1
+      ORDER BY CASE WHEN external_id = $1 THEN 0 ELSE 1 END
       LIMIT 1
       `,
       [notificationId]
@@ -95,6 +100,7 @@ router.post('/:id/open', auth(['user', 'ngo', 'admin']), async (req, res) => {
     if (!row) return res.status(404).json({ message: 'Notification not found.' });
 
     const note = mapRowDoc(row);
+    const resolvedExternalId = String(row.external_id || '').trim() || notificationId;
     const role = String(req.user.role || '').trim().toLowerCase();
     const principalId = String(req.user.id || '').trim();
     if (!canAccessNotification(note, role, principalId)) {
@@ -122,7 +128,7 @@ router.post('/:id/open', auth(['user', 'ngo', 'admin']), async (req, res) => {
           updated_at = NOW()
       WHERE external_id = $1
       `,
-      [notificationId, JSON.stringify(note)]
+      [resolvedExternalId, JSON.stringify(note)]
     );
 
     const webhookResult = await dispatchWebhook('notification.engagement', {
@@ -140,7 +146,8 @@ router.post('/:id/open', auth(['user', 'ngo', 'admin']), async (req, res) => {
     });
 
     return res.json({
-      id: note.id || notificationId,
+      id: note.id || resolvedExternalId,
+      externalId: resolvedExternalId,
       action,
       openedAt: note.openedAt || null,
       clickedAt: note.clickedAt || null,

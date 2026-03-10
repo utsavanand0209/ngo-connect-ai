@@ -213,11 +213,16 @@ export default function NgoDashboard() {
     return summary;
   }, [helpRequests]);
 
-  const hasCampaignUpdatesWithoutRecipients = useMemo(() => {
+  const campaignUpdateRecipientNoticeType = useMemo(() => {
     const totals = campaignUpdateAnalytics?.totals || {};
     const updatesCount = Number(totals.updatesCount || 0);
     const targetDonors = Number(totals.targetDonors || 0);
-    return updatesCount > 0 && targetDonors === 0;
+    if (!(updatesCount > 0 && targetDonors === 0)) return '';
+
+    const completedDonorsCount = Number(totals.completedDonorsCount || 0);
+    const legacyUndeliveredUpdatesCount = Number(totals.legacyUndeliveredUpdatesCount || 0);
+    if (completedDonorsCount > 0 && legacyUndeliveredUpdatesCount > 0) return 'legacy_updates';
+    return 'no_completed_donors';
   }, [campaignUpdateAnalytics]);
 
   const hasEmailDeliveryFailures = useMemo(() => {
@@ -723,13 +728,13 @@ export default function NgoDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <header className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+    <div className="role-dashboard role-ngo">
+      <div className="role-dashboard__inner space-y-6">
+        <header className="role-hero">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">NGO Dashboard</h1>
-              <p className="text-gray-600 mt-1">{ngo?.name || 'Your NGO workspace'}</p>
+              <h1 className="text-display text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight">NGO Dashboard</h1>
+              <p className="text-slate-600 mt-2">{ngo?.name || 'Your NGO workspace'}</p>
             </div>
             <div className={`px-3 py-2 rounded-lg text-sm font-semibold ${isVerified ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
               {isVerified ? 'Verified NGO' : 'Verification Pending'}
@@ -737,41 +742,41 @@ export default function NgoDashboard() {
           </div>
 
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4">
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="role-stat-card">
               <p className="text-sm text-gray-500">Total Donation Amount</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">{currency(donationSummary.totalCompletedAmount)}</p>
+              <p className="text-xl font-bold text-gray-900 mt-1 text-metric">{currency(donationSummary.totalCompletedAmount)}</p>
             </div>
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="role-stat-card">
               <p className="text-sm text-gray-500">Completed Donations</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">{Number(donationSummary.completedCount || 0)}</p>
+              <p className="text-xl font-bold text-gray-900 mt-1 text-metric">{Number(donationSummary.completedCount || 0)}</p>
             </div>
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="role-stat-card">
               <p className="text-sm text-gray-500">Volunteer Signups</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">{Number(volunteerSignupTotal || 0)}</p>
+              <p className="text-xl font-bold text-gray-900 mt-1 text-metric">{Number(volunteerSignupTotal || 0)}</p>
             </div>
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="role-stat-card">
               <p className="text-sm text-gray-500">Pending Certificates</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">{pendingCertificateTotal}</p>
+              <p className="text-xl font-bold text-gray-900 mt-1 text-metric">{pendingCertificateTotal}</p>
             </div>
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="role-stat-card">
               <p className="text-sm text-gray-500">Unread Messages</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">{messageUnreadCount}</p>
+              <p className="text-xl font-bold text-gray-900 mt-1 text-metric">{messageUnreadCount}</p>
               <Link to="/messages" className="inline-block mt-2 text-sm text-indigo-600 hover:underline">Open Inbox</Link>
             </div>
             <button
               type="button"
               onClick={() => setTeamListOpen(true)}
-              className="rounded-lg border border-indigo-200 p-4 text-left hover:bg-indigo-50 transition"
+              className="role-stat-card text-left hover:bg-indigo-50 transition border-indigo-200"
             >
               <p className="text-sm text-gray-500">Members & Team List</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">{memberRows.length}</p>
+              <p className="text-xl font-bold text-gray-900 mt-1 text-metric">{memberRows.length}</p>
               <p className="text-xs text-indigo-700 mt-1">
                 {teamStrengthRows.length} roles • {memberCampaignCount} campaigns
               </p>
             </button>
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="role-stat-card">
               <p className="text-sm text-gray-500">Support Requests</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">{supportRequestSummary.total}</p>
+              <p className="text-xl font-bold text-gray-900 mt-1 text-metric">{supportRequestSummary.total}</p>
               <p className="text-xs text-gray-500 mt-1">
                 Pending: {supportRequestSummary.pending} • Approved: {supportRequestSummary.approved} • Completed: {supportRequestSummary.completed}
               </p>
@@ -791,7 +796,7 @@ export default function NgoDashboard() {
           </div>
         </header>
 
-        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <section className="role-panel p-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Campaign Update Analytics</h2>
@@ -814,17 +819,19 @@ export default function NgoDashboard() {
             </div>
           )}
 
-          {!campaignUpdateAnalyticsMessage && hasCampaignUpdatesWithoutRecipients && (
+          {!campaignUpdateAnalyticsMessage && Boolean(campaignUpdateRecipientNoticeType) && (
             <div className="mt-4 p-3 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
-              Updates are published, but this campaign set has no completed donor records yet. Recipient delivery starts
-              after donations are completed on those campaigns.
+              {campaignUpdateRecipientNoticeType === 'legacy_updates'
+                ? 'Some updates are legacy/imported notes and were not distributed through donor notifications. Publish a fresh update to notify current completed donors.'
+                : 'Updates are published, but this campaign set has no completed donor records yet. Recipient delivery starts after donations are completed on those campaigns.'}
             </div>
           )}
 
           {!campaignUpdateAnalyticsMessage && hasEmailDeliveryFailures && (
             <div className="mt-3 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-              Email attempts are being made but none are sent. Configure SMTP in `backend/.env` (`MAIL_HOST`, `MAIL_PORT`,
-              `MAIL_USER`, `MAIL_PASS`, optional `MAIL_FROM`) to enable email delivery metrics.
+              Email attempts are being made but none are sent. Configure email provider settings in `backend/.env`:
+              SMTP (`MAIL_PROVIDER=smtp`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASS`) or Resend
+              (`MAIL_PROVIDER=resend`, `RESEND_API_KEY`, `RESEND_FROM`).
             </div>
           )}
 
@@ -833,25 +840,25 @@ export default function NgoDashboard() {
           ) : (
             <>
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div className="rounded-lg border border-gray-200 p-4">
+                <div className="role-stat-card">
                   <p className="text-sm text-gray-500">Updates Published</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1">{Number(campaignUpdateAnalytics?.totals?.updatesCount || 0)}</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1 text-metric">{Number(campaignUpdateAnalytics?.totals?.updatesCount || 0)}</p>
                 </div>
-                <div className="rounded-lg border border-gray-200 p-4">
+                <div className="role-stat-card">
                   <p className="text-sm text-gray-500">In-App Delivered</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1">{Number(campaignUpdateAnalytics?.totals?.sentCount || 0)}</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1 text-metric">{Number(campaignUpdateAnalytics?.totals?.sentCount || 0)}</p>
                 </div>
-                <div className="rounded-lg border border-gray-200 p-4">
+                <div className="role-stat-card">
                   <p className="text-sm text-gray-500">Open Rate</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1">{toPercent(campaignUpdateAnalytics?.totals?.openRate || 0)}</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1 text-metric">{toPercent(campaignUpdateAnalytics?.totals?.openRate || 0)}</p>
                 </div>
-                <div className="rounded-lg border border-gray-200 p-4">
+                <div className="role-stat-card">
                   <p className="text-sm text-gray-500">Click Rate</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1">{toPercent(campaignUpdateAnalytics?.totals?.clickRate || 0)}</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1 text-metric">{toPercent(campaignUpdateAnalytics?.totals?.clickRate || 0)}</p>
                 </div>
-                <div className="rounded-lg border border-gray-200 p-4">
+                <div className="role-stat-card">
                   <p className="text-sm text-gray-500">Email Delivery</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1">{toPercent(campaignUpdateAnalytics?.totals?.emailDeliveryRate || 0)}</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1 text-metric">{toPercent(campaignUpdateAnalytics?.totals?.emailDeliveryRate || 0)}</p>
                 </div>
               </div>
 
@@ -911,7 +918,7 @@ export default function NgoDashboard() {
           )}
         </section>
 
-        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <section className="role-panel p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Certificate Approval Queue</h2>
@@ -1044,7 +1051,7 @@ export default function NgoDashboard() {
           )}
         </section>
 
-        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <section className="role-panel p-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Support Requests Inbox</h2>
@@ -1238,7 +1245,7 @@ export default function NgoDashboard() {
           )}
         </section>
 
-        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <section className="role-panel p-6">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-2xl font-bold text-gray-900">Donation Transactions</h2>
             <span className="text-sm text-gray-500">{donationTransactions.length} recent records</span>
@@ -1281,7 +1288,7 @@ export default function NgoDashboard() {
           </div>
         </section>
 
-        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <section className="role-panel p-6">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-2xl font-bold text-gray-900">Volunteer Requests</h2>
             <div className="text-sm text-gray-600 flex items-center gap-3">
@@ -1326,7 +1333,7 @@ export default function NgoDashboard() {
           </div>
         </section>
 
-        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <section className="role-panel p-6">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-2xl font-bold text-gray-900">Campaign Volunteer Registrations</h2>
             <div className="text-sm text-gray-600 flex items-center gap-3">
@@ -1471,7 +1478,7 @@ export default function NgoDashboard() {
           </div>
         </section>
 
-        <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <section className="role-panel p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Link to="/campaigns/create" className="px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 font-medium text-gray-800">Create Campaign</Link>
@@ -1556,7 +1563,7 @@ export default function NgoDashboard() {
                   </button>
                 </div>
 
-                <div className="rounded-lg border border-gray-200 p-4">
+                <div className="role-stat-card">
                   <h4 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Team Strength Breakdown</h4>
                   {teamStrengthRows.length > 0 ? (
                     <>
@@ -1950,7 +1957,7 @@ export default function NgoDashboard() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-gray-200 p-4">
+                <div className="role-stat-card">
                   <p className="text-sm text-gray-500">Requester</p>
                   <p className="font-semibold text-gray-900 mt-1">
                     {selectedHelpRequest.user?.name || selectedHelpRequest.name || 'Requester'}
@@ -1963,17 +1970,17 @@ export default function NgoDashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="rounded-lg border border-gray-200 p-4">
+                  <div className="role-stat-card">
                     <p className="text-sm text-gray-500">Help Type</p>
                     <p className="font-semibold text-gray-900 mt-1">{selectedHelpRequest.helpType || '-'}</p>
                   </div>
-                  <div className="rounded-lg border border-gray-200 p-4">
+                  <div className="role-stat-card">
                     <p className="text-sm text-gray-500">Location</p>
                     <p className="font-semibold text-gray-900 mt-1">{selectedHelpRequest.location || '-'}</p>
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-gray-200 p-4">
+                <div className="role-stat-card">
                   <p className="text-sm text-gray-500">Description</p>
                   <p className="text-gray-800 mt-2 whitespace-pre-wrap">{selectedHelpRequest.description || 'No description provided.'}</p>
                 </div>

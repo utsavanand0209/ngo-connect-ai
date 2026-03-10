@@ -144,8 +144,53 @@ const emptyUpdateTotals = () => ({
   emailFailedCount: 0,
   openRate: 0,
   clickRate: 0,
-  emailDeliveryRate: 0
+  emailDeliveryRate: 0,
+  completedDonorsCount: 0,
+  legacyUndeliveredUpdatesCount: 0
 });
+
+const loadCompletedDonorCountsByCampaign = async (campaignIds = []) => {
+  const normalizedIds = Array.from(
+    new Set((Array.isArray(campaignIds) ? campaignIds : []).map((id) => String(id || '').trim()).filter(Boolean))
+  );
+  const counts = new Map();
+  if (normalizedIds.length === 0) return counts;
+
+  const { rows } = await query(
+    `
+    SELECT
+      refs.campaign_ref AS campaign_id,
+      COUNT(DISTINCT refs.user_ref)::int AS completed_donors_count
+    FROM donations_rel d
+    CROSS JOIN LATERAL (
+      SELECT
+        CASE
+          WHEN jsonb_typeof(d.source_doc->'campaign') = 'string' THEN NULLIF(d.source_doc->>'campaign', '')
+          WHEN jsonb_typeof(d.source_doc->'campaign') = 'object' THEN NULLIF(d.source_doc#>>'{campaign,id}', '')
+          ELSE NULL
+        END AS campaign_ref,
+        CASE
+          WHEN jsonb_typeof(d.source_doc->'user') = 'string' THEN NULLIF(d.source_doc->>'user', '')
+          WHEN jsonb_typeof(d.source_doc->'user') = 'object' THEN NULLIF(d.source_doc#>>'{user,id}', '')
+          ELSE NULL
+        END AS user_ref
+    ) refs
+    WHERE refs.campaign_ref = ANY($1::text[])
+      AND refs.user_ref IS NOT NULL
+      AND COALESCE(NULLIF(d.source_doc->>'status', ''), 'pending') = 'completed'
+    GROUP BY refs.campaign_ref
+    `,
+    [normalizedIds]
+  );
+
+  rows.forEach((row) => {
+    const campaignId = String(row?.campaign_id || '').trim();
+    if (!campaignId) return;
+    counts.set(campaignId, Number(row?.completed_donors_count || 0));
+  });
+
+  return counts;
+};
 
 const buildLegacyUpdateId = (entry, index = 0) => {
   const safeIndex = Number.isFinite(Number(index)) ? Number(index) + 1 : 1;
@@ -593,6 +638,8 @@ router.get('/:id/updates/analytics', auth(['ngo', 'admin']), async (req, res) =>
     const normalizedUpdates = rawUpdates
       .map((entry, index) => normalizeCampaignUpdateEntry(entry, index))
       .filter((entry) => entry && entry.id);
+    const completedDonorCountsByCampaign = await loadCompletedDonorCountsByCampaign([campaign.id]);
+    const completedDonorsCount = Number(completedDonorCountsByCampaign.get(String(campaign.id)) || 0);
 
     const { rows } = await query(
       `
@@ -635,12 +682,19 @@ router.get('/:id/updates/analytics', auth(['ngo', 'admin']), async (req, res) =>
 
       const openedAt = String(doc.openedAt || '').trim();
       const clickedAt = String(doc.clickedAt || '').trim();
+      const openCount = Number(doc.openCount || 0);
       const clickCount = Number(doc.clickCount || 0);
 
-      if (openedAt) bucket.openedCount += 1;
+      if (openedAt || openCount > 0) bucket.openedCount += 1;
       if (clickedAt || clickCount > 0) bucket.clickedCount += 1;
 
-      const interactionCandidates = [clickedAt, openedAt, String(doc.createdAt || '').trim()]
+      const interactionCandidates = [
+        clickedAt,
+        openedAt,
+        String(doc.lastEngagementAt || '').trim(),
+        String(doc.updatedAt || '').trim(),
+        String(doc.createdAt || '').trim()
+      ]
         .map((value) => parseTimestamp(value))
         .filter((value) => value > 0);
       if (interactionCandidates.length > 0) {
@@ -669,6 +723,14 @@ router.get('/:id/updates/analytics', auth(['ngo', 'admin']), async (req, res) =>
         const emailSentCount = Number(delivery.emailSent || 0);
         const emailFailedCount = Math.max(Number(delivery.emailFailed || emailAttemptedCount - emailSentCount), 0);
         const targetDonors = Number(delivery.targetDonors || sentCount || 0);
+        const hasTrackedDelivery = (
+          sentCount > 0
+          || targetDonors > 0
+          || Number(delivery.inAppDelivered || 0) > 0
+          || emailAttemptedCount > 0
+          || emailSentCount > 0
+        );
+        const legacyUndelivered = String(update.id || '').startsWith('legacy_update_') && !hasTrackedDelivery;
 
         return {
           updateId: update.id,
@@ -684,7 +746,8 @@ router.get('/:id/updates/analytics', auth(['ngo', 'admin']), async (req, res) =>
           emailSentCount,
           emailFailedCount,
           emailDeliveryRate: toRate(emailSentCount, emailAttemptedCount),
-          lastInteractionAt: fromNotifications.lastInteractionAt || null
+          lastInteractionAt: fromNotifications.lastInteractionAt || null,
+          legacyUndelivered
         };
       })
       .sort((left, right) => parseTimestamp(right.createdAt) - parseTimestamp(left.createdAt));
@@ -699,26 +762,16 @@ router.get('/:id/updates/analytics', auth(['ngo', 'admin']), async (req, res) =>
         acc.emailAttemptedCount += Number(row.emailAttemptedCount || 0);
         acc.emailSentCount += Number(row.emailSentCount || 0);
         acc.emailFailedCount += Number(row.emailFailedCount || 0);
+        if (row.legacyUndelivered) acc.legacyUndeliveredUpdatesCount += 1;
         return acc;
       },
-      {
-        updatesCount: 0,
-        targetDonors: 0,
-        sentCount: 0,
-        openedCount: 0,
-        clickedCount: 0,
-        emailAttemptedCount: 0,
-        emailSentCount: 0,
-        emailFailedCount: 0,
-        openRate: 0,
-        clickRate: 0,
-        emailDeliveryRate: 0
-      }
+      emptyUpdateTotals()
     );
 
     totals.openRate = toRate(totals.openedCount, totals.sentCount);
     totals.clickRate = toRate(totals.clickedCount, totals.sentCount);
     totals.emailDeliveryRate = toRate(totals.emailSentCount, totals.emailAttemptedCount);
+    totals.completedDonorsCount = completedDonorsCount;
 
     return res.json({
       campaignId: campaign.id,
@@ -893,6 +946,7 @@ router.get('/ngo/campaign-updates/analytics', auth(['ngo']), async (req, res) =>
     }
 
     const campaignIds = campaignDocs.map((campaign) => String(campaign.id)).filter(Boolean);
+    const completedDonorCountsByCampaign = await loadCompletedDonorCountsByCampaign(campaignIds);
     const { rows } = await query(
       `
       SELECT source_doc
@@ -915,6 +969,8 @@ router.get('/ngo/campaign-updates/analytics', auth(['ngo']), async (req, res) =>
     });
 
     const campaignAnalytics = campaignDocs.map((campaign) => {
+      const campaignId = String(campaign.id || '').trim();
+      const completedDonorsCount = Number(completedDonorCountsByCampaign.get(campaignId) || 0);
       const normalizedUpdates = (Array.isArray(campaign.updates) ? campaign.updates : [])
         .map((entry, index) => normalizeCampaignUpdateEntry(entry, index))
         .filter((entry) => entry && entry.id);
@@ -929,7 +985,7 @@ router.get('/ngo/campaign-updates/analytics', auth(['ngo']), async (req, res) =>
         });
       });
 
-      const campaignNotifications = notificationsByCampaign.get(String(campaign.id)) || [];
+      const campaignNotifications = notificationsByCampaign.get(campaignId) || [];
       campaignNotifications.forEach((doc) => {
         const updateId = String(doc.campaignUpdateId || '').trim();
         if (!updateId || !statsByUpdate.has(updateId)) return;
@@ -939,12 +995,19 @@ router.get('/ngo/campaign-updates/analytics', auth(['ngo']), async (req, res) =>
 
         const openedAt = String(doc.openedAt || '').trim();
         const clickedAt = String(doc.clickedAt || '').trim();
+        const openCount = Number(doc.openCount || 0);
         const clickCount = Number(doc.clickCount || 0);
 
-        if (openedAt) bucket.openedCount += 1;
+        if (openedAt || openCount > 0) bucket.openedCount += 1;
         if (clickedAt || clickCount > 0) bucket.clickedCount += 1;
 
-        const interactionCandidates = [clickedAt, openedAt, String(doc.createdAt || '').trim()]
+        const interactionCandidates = [
+          clickedAt,
+          openedAt,
+          String(doc.lastEngagementAt || '').trim(),
+          String(doc.updatedAt || '').trim(),
+          String(doc.createdAt || '').trim()
+        ]
           .map((value) => parseTimestamp(value))
           .filter((value) => value > 0);
         if (interactionCandidates.length > 0) {
@@ -973,6 +1036,14 @@ router.get('/ngo/campaign-updates/analytics', auth(['ngo']), async (req, res) =>
           const emailSentCount = Number(delivery.emailSent || 0);
           const emailFailedCount = Math.max(Number(delivery.emailFailed || emailAttemptedCount - emailSentCount), 0);
           const targetDonors = Number(delivery.targetDonors || sentCount || 0);
+          const hasTrackedDelivery = (
+            sentCount > 0
+            || targetDonors > 0
+            || Number(delivery.inAppDelivered || 0) > 0
+            || emailAttemptedCount > 0
+            || emailSentCount > 0
+          );
+          const legacyUndelivered = String(update.id || '').startsWith('legacy_update_') && !hasTrackedDelivery;
 
           return {
             updateId: update.id,
@@ -988,7 +1059,8 @@ router.get('/ngo/campaign-updates/analytics', auth(['ngo']), async (req, res) =>
             emailSentCount,
             emailFailedCount,
             emailDeliveryRate: toRate(emailSentCount, emailAttemptedCount),
-            lastInteractionAt: fromNotifications.lastInteractionAt || null
+            lastInteractionAt: fromNotifications.lastInteractionAt || null,
+            legacyUndelivered
           };
         })
         .sort((left, right) => parseTimestamp(right.createdAt) - parseTimestamp(left.createdAt));
@@ -1003,6 +1075,7 @@ router.get('/ngo/campaign-updates/analytics', auth(['ngo']), async (req, res) =>
           acc.emailAttemptedCount += Number(row.emailAttemptedCount || 0);
           acc.emailSentCount += Number(row.emailSentCount || 0);
           acc.emailFailedCount += Number(row.emailFailedCount || 0);
+          if (row.legacyUndelivered) acc.legacyUndeliveredUpdatesCount += 1;
           return acc;
         },
         emptyUpdateTotals()
@@ -1010,6 +1083,7 @@ router.get('/ngo/campaign-updates/analytics', auth(['ngo']), async (req, res) =>
       totals.openRate = toRate(totals.openedCount, totals.sentCount);
       totals.clickRate = toRate(totals.clickedCount, totals.sentCount);
       totals.emailDeliveryRate = toRate(totals.emailSentCount, totals.emailAttemptedCount);
+      totals.completedDonorsCount = completedDonorsCount;
 
       const lastUpdateAt = updates.length > 0 ? updates[0].createdAt : (campaign.createdAt || null);
       const lastInteractionAt = updates.reduce((value, row) => {
@@ -1042,6 +1116,8 @@ router.get('/ngo/campaign-updates/analytics', auth(['ngo']), async (req, res) =>
         acc.emailAttemptedCount += Number(source.emailAttemptedCount || 0);
         acc.emailSentCount += Number(source.emailSentCount || 0);
         acc.emailFailedCount += Number(source.emailFailedCount || 0);
+        acc.completedDonorsCount += Number(source.completedDonorsCount || 0);
+        acc.legacyUndeliveredUpdatesCount += Number(source.legacyUndeliveredUpdatesCount || 0);
         return acc;
       },
       emptyUpdateTotals()

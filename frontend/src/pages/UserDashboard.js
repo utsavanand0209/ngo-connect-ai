@@ -71,6 +71,7 @@ const buildReceiptHtml = (receipt) => {
 };
 
 const monthLabel = (value) => new Date(value).toLocaleString('en-US', { month: 'short', year: '2-digit' });
+const resolveNotificationId = (note) => String(note?.externalId || note?.id || '').trim();
 
 export default function UserDashboard() {
   const navigate = useNavigate();
@@ -226,7 +227,7 @@ export default function UserDashboard() {
     if (!Array.isArray(notifications) || notifications.length === 0) return;
 
     const eligible = notifications.filter((note) => {
-      const id = String(note?.id || '').trim();
+      const id = resolveNotificationId(note);
       if (!id) return false;
       if (String(note?.notificationType || '').trim() !== 'campaign_update') return false;
       if (note?.openedAt) return false;
@@ -236,7 +237,7 @@ export default function UserDashboard() {
     if (eligible.length === 0) return;
 
     eligible.forEach((note) => {
-      const notificationId = String(note.id || '').trim();
+      const notificationId = resolveNotificationId(note);
       if (!notificationId) return;
       trackedOpenNotificationIdsRef.current.add(notificationId);
 
@@ -244,7 +245,8 @@ export default function UserDashboard() {
         .then((res) => {
           setNotifications((prev) =>
             (prev || []).map((entry) => {
-              if (String(entry?.id || '') !== notificationId) return entry;
+              const entryNotificationId = resolveNotificationId(entry);
+              if (entryNotificationId !== notificationId) return entry;
               return {
                 ...entry,
                 openedAt: res?.data?.openedAt || entry?.openedAt || new Date().toISOString(),
@@ -293,13 +295,17 @@ export default function UserDashboard() {
     }
   };
 
-  const handleNotificationClick = (notificationId) => {
+  const handleNotificationClick = (notification) => {
+    const notificationId = typeof notification === 'string'
+      ? String(notification || '').trim()
+      : resolveNotificationId(notification);
     if (!notificationId) return;
     trackNotificationEngagement(notificationId, { action: 'click' })
       .then((res) => {
         setNotifications((prev) =>
           (prev || []).map((entry) => {
-            if (String(entry?.id || '') !== String(notificationId)) return entry;
+            const entryNotificationId = resolveNotificationId(entry);
+            if (entryNotificationId !== String(notificationId)) return entry;
             return {
               ...entry,
               openedAt: res?.data?.openedAt || entry?.openedAt || new Date().toISOString(),
@@ -560,50 +566,50 @@ export default function UserDashboard() {
   if (loading) return <div className="p-6 text-center">Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-800">Welcome, {user?.name || 'User'}!</h1>
-          <p className="text-gray-600 mt-1">Track your impact, manage requests, and continue supporting verified NGOs.</p>
+    <div className="role-dashboard role-user">
+      <div className="role-dashboard__inner">
+        <header className="role-hero mb-8">
+          <h1 className="text-display text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight">Welcome, {user?.name || 'User'}!</h1>
+          <p className="text-slate-600 mt-2">Track your impact, manage requests, and continue supporting verified NGOs.</p>
         </header>
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6 border border-gray-200 hover:shadow-md transition cursor-pointer" onClick={() => navigate('/ngos')}>
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Verified NGOs</h3>
-            <p className="text-3xl font-bold text-gray-900 mt-2">{ngoCount}</p>
+          <div className="role-stat-card hover:shadow-md transition cursor-pointer" onClick={() => navigate('/ngos')}>
+            <h3 className="text-kicker">Verified NGOs</h3>
+            <p className="text-3xl font-bold text-gray-900 mt-2 text-metric">{ngoCount}</p>
             <p className="text-sm text-gray-600 mt-2">Browse trusted organizations by cause and location.</p>
           </div>
-          <div className="bg-white rounded-lg shadow p-6 border border-gray-200 hover:shadow-md transition cursor-pointer" onClick={() => navigate('/campaigns')}>
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Active Campaigns</h3>
-            <p className="text-3xl font-bold text-gray-900 mt-2">{campaignCount}</p>
+          <div className="role-stat-card hover:shadow-md transition cursor-pointer" onClick={() => navigate('/campaigns')}>
+            <h3 className="text-kicker">Active Campaigns</h3>
+            <p className="text-3xl font-bold text-gray-900 mt-2 text-metric">{campaignCount}</p>
             <p className="text-sm text-gray-600 mt-2">See live campaigns and latest impact updates.</p>
           </div>
         </section>
 
-        <section className="bg-white rounded-lg shadow p-6 mb-8 border border-gray-200">
+        <section className="role-panel p-6 mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-1">Contribution Actions</h2>
           <p className="text-sm text-gray-600 mb-5">Use dedicated workflows for secure donations and volunteering.</p>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Link to="/donate" className="rounded-lg border border-gray-200 p-4 hover:border-indigo-300 hover:bg-indigo-50/40 transition">
+            <Link to="/donate" className="role-soft-link">
               <p className="font-semibold text-gray-900">Donate to Campaigns</p>
               <p className="text-sm text-gray-600 mt-1">Open full payment flow with receipts and approval tracking.</p>
             </Link>
-            <Link to="/volunteer-opportunities" className="rounded-lg border border-gray-200 p-4 hover:border-indigo-300 hover:bg-indigo-50/40 transition">
+            <Link to="/volunteer-opportunities" className="role-soft-link">
               <p className="font-semibold text-gray-900">Volunteer Opportunities</p>
               <p className="text-sm text-gray-600 mt-1">Apply with your details and track assignment status.</p>
             </Link>
-            <Link to="/campaigns" className="rounded-lg border border-gray-200 p-4 hover:border-indigo-300 hover:bg-indigo-50/40 transition">
+            <Link to="/campaigns" className="role-soft-link">
               <p className="font-semibold text-gray-900">Browse Campaigns</p>
               <p className="text-sm text-gray-600 mt-1">Review campaign updates, impact, and organizer details.</p>
             </Link>
-            <Link to="/innovation-center" className="rounded-lg border border-gray-200 p-4 hover:border-indigo-300 hover:bg-indigo-50/40 transition">
+            <Link to="/innovation-center" className="role-soft-link">
               <p className="font-semibold text-gray-900">Innovation Center</p>
               <p className="text-sm text-gray-600 mt-1">Join giving circles, pledge in-kind items, and track your points.</p>
             </Link>
           </div>
         </section>
 
-        <section className="bg-white rounded-lg shadow-lg p-8 mb-8">
+        <section className="role-panel p-8 mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-800">Your Donation & Volunteer History</h2>
@@ -627,19 +633,19 @@ export default function UserDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-gray-50 rounded-lg border p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wide">Total Donated</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">₹{totalDonated.toLocaleString('en-IN')}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1 text-metric">₹{totalDonated.toLocaleString('en-IN')}</p>
             </div>
             <div className="bg-gray-50 rounded-lg border p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wide">Donations</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{donationsHistory.length}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1 text-metric">{donationsHistory.length}</p>
             </div>
             <div className="bg-gray-50 rounded-lg border p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wide">Volunteer Activities</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{completedVolunteerActivities}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1 text-metric">{completedVolunteerActivities}</p>
             </div>
             <div className="bg-gray-50 rounded-lg border p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wide">Volunteer Hours</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{totalVolunteerHours.toLocaleString('en-IN')}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1 text-metric">{totalVolunteerHours.toLocaleString('en-IN')}</p>
             </div>
           </div>
 
@@ -958,25 +964,25 @@ export default function UserDashboard() {
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-          <div className="lg:col-span-2 bg-white rounded-lg shadow-lg p-8">
+          <div className="lg:col-span-2 role-panel p-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-6">Quick Actions</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Link to="/profile" className="block p-4 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition">
+              <Link to="/profile" className="role-soft-link block">
                 <h3 className="font-semibold text-gray-800">Complete Profile</h3>
                 <p className="text-sm text-gray-600 mt-1">Add interests to improve recommendations.</p>
               </Link>
-              <Link to="/ngos" className="block p-4 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition">
+              <Link to="/ngos" className="role-soft-link block">
                 <h3 className="font-semibold text-gray-800">Browse NGOs</h3>
                 <p className="text-sm text-gray-600 mt-1">Find verified NGOs by category and location.</p>
               </Link>
-              <Link to="/campaigns" className="block p-4 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition">
+              <Link to="/campaigns" className="role-soft-link block">
                 <h3 className="font-semibold text-gray-800">Browse Campaigns</h3>
                 <p className="text-sm text-gray-600 mt-1">View active campaigns and payment goals.</p>
               </Link>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-lg p-8">
+          <div className="role-panel p-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-6">Discover</h2>
             <button
               onClick={handleGetRecommendations}
@@ -987,7 +993,7 @@ export default function UserDashboard() {
           </div>
         </section>
 
-        <section className="bg-white rounded-lg shadow-lg p-6 mb-8">
+        <section className="role-panel p-6 mb-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Notifications</h2>
           {notificationsLoading ? (
             <p className="text-gray-600">Loading notifications...</p>
@@ -1005,7 +1011,7 @@ export default function UserDashboard() {
                   {note.notificationType === 'campaign_update' && note.campaignId && (
                     <Link
                       to={`/campaigns/${note.campaignId}`}
-                      onClick={() => handleNotificationClick(note.id)}
+                      onClick={() => handleNotificationClick(note)}
                       className="inline-block mt-2 text-xs font-semibold text-indigo-600 hover:underline"
                     >
                       View Campaign Update
@@ -1017,7 +1023,7 @@ export default function UserDashboard() {
           )}
         </section>
 
-        <section className="bg-white rounded-lg shadow-lg p-8 mb-8">
+        <section className="role-panel p-8 mb-8">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <h2 className="text-2xl font-bold text-gray-800 mb-2">Request Support</h2>

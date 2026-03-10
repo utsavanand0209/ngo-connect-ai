@@ -101,8 +101,9 @@ Backend API for NGO-Connect. Runtime is PostgreSQL-first and serves all client a
 - Legacy campaign updates are normalized with generated IDs so analytics counts are stable.
 - Open/click rates depend on notification engagement events:
   - `POST /api/notifications/:id/open`
-- Email delivery rate depends on SMTP success:
-  - configure `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASS` (and optional `MAIL_FROM`)
+- Email delivery rate depends on configured provider success:
+  - SMTP: `MAIL_PROVIDER=smtp`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASS` (optional `MAIL_FROM`)
+  - Resend: `MAIL_PROVIDER=resend`, `RESEND_API_KEY`, `RESEND_FROM` (optional `RESEND_REPLY_TO`)
 
 ## Backend Architecture
 
@@ -271,12 +272,20 @@ PAYMENT_GATEWAY_PROVIDER=mock
 # RAZORPAY_KEY_ID=<key>
 # RAZORPAY_KEY_SECRET=<secret>
 # Optional SMTP (campaign-update email delivery)
+# MAIL_PROVIDER=smtp
 # MAIL_HOST=smtp.example.com
 # MAIL_PORT=587
 # MAIL_SECURE=false
 # MAIL_USER=<smtp-user>
 # MAIL_PASS=<smtp-pass>
 # MAIL_FROM="NGO Connect <no-reply@example.com>"
+# Optional Resend (campaign-update email delivery)
+# MAIL_PROVIDER=resend
+# RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
+# RESEND_FROM="NGO Connect <onboarding@resend.dev>"
+# RESEND_REPLY_TO=support@example.com
+# RESEND_TIMEOUT_MS=10000
+# RESEND_API_URL=https://api.resend.com
 # FRONTEND_URL=http://localhost:3000
 # Optional outbound webhook settings
 # WEBHOOK_ENABLED=true
