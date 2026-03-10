@@ -83,6 +83,27 @@ NGO-Connect is a full-stack platform that connects donors, volunteers, NGOs, and
   - emergency campaign contributions in Innovation Center now use the full payment method + gateway flow (UPI/card/netbanking)
   - giving circle contributions now use payment method + gateway flow (UPI/card) before recording the circle contribution
 
+### Phase 11: End-To-End Role Scenario + Data Flood Testing
+- Added high-volume role workflow scenario runner:
+  - `npm run scenario:flood` (from `backend/`)
+- Added role moderation scenario runner:
+  - `npm run scenario:roles` (from `backend/`)
+- Scenario runner now creates and validates cross-role workflows for:
+  - users, NGOs, admin moderation
+  - campaigns, members, opportunities, shifts, wishlists, pledges
+  - donations, campaign updates, messaging, help requests, endorsements
+  - CRM segments, corporate matching, emergency feed, webhook admin operations
+- Automated scenario reports are now written to:
+  - `docs/test-reports/`
+
+### Phase 12: Campaign Update Analytics Reliability
+- Legacy campaign updates are now normalized and included in analytics totals.
+- User dashboard now tracks campaign-update notification opens automatically when update notifications are viewed.
+- Click tracking remains linked to `View Campaign Update` action.
+- Email delivery metric behavior:
+  - `Email Delivery` only increases when SMTP is configured and emails are actually sent.
+  - without SMTP (`MAIL_*` not set), attempts can increase while sent remains `0`.
+
 ## Innovation Center Features And Flow
 
 Route: `/innovation-center` (for authenticated `user` and `ngo` roles).
@@ -382,6 +403,8 @@ npm run dev
 npm run start
 npm run seed
 npm run smoke
+npm run scenario:flood
+npm run scenario:roles
 npm run smoke:webhook
 npm run smoke:webhook:worker
 npm run webhook:worker:tick
@@ -443,6 +466,8 @@ npm run smoke:webhook:worker
 npm run webhook:worker:tick
 npm run webhook:cleanup
 npm run db:migrate:innovation
+npm run scenario:flood
+npm run scenario:roles
 ```
 
 Apply Phase 5 webhook migration without resetting all tables:
@@ -455,6 +480,25 @@ npm run db:migrate:webhooks
 Optional: override API base and credentials via env vars:
 - `API_BASE` (default: `http://localhost:5001/api`)
 - `SMOKE_USER_EMAIL`, `SMOKE_NGO_EMAIL`, `SMOKE_ADMIN_EMAIL` (passwords also supported)
+
+Optional flood scenario sizing env vars:
+- `FLOOD_USER_COUNT`
+- `FLOOD_NGO_COUNT`
+- `FLOOD_CAMPAIGNS_PER_NGO`
+- `FLOOD_OPPORTUNITIES_PER_NGO`
+- `FLOOD_WISHLIST_ITEMS_PER_NGO`
+- `FLOOD_SHIFTS_PER_NGO`
+- `FLOOD_MEMBERS_PER_ROLE`
+
+## Analytics Notes
+- `Open Rate` / `Click Rate` depend on engagement events captured via:
+  - `POST /api/notifications/:id/open`
+- `Email Delivery` depends on SMTP runtime configuration in `backend/.env`:
+  - `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASS`, optional `MAIL_FROM`
+- If SMTP is missing, dashboard may show:
+  - non-zero `attempts`
+  - zero `sent`
+  - `Email Delivery = 0.0%`
 
 ## Seed Credentials (Local)
 - Admin: `admin@ngoconnect.org` / `password123`

@@ -66,6 +66,20 @@ React client for NGO-Connect. It provides role-based experiences for users, NGOs
 - Innovation Center now supports giving-circle contributions with payment method fields (UPI/card) and gateway checkout before contribution recording.
 - Innovation Center now displays completed-state locks for giving circles and wishlist needs (shows `Need Completed` and disables further inputs).
 
+### Phase 11
+- Added deep backend role scenarios for realistic QA coverage:
+  - `backend: npm run scenario:flood`
+  - `backend: npm run scenario:roles`
+- These scenarios populate rich datasets used by frontend dashboards and run all major user/NGO/admin paths.
+
+### Phase 12
+- Campaign update analytics UX now clearly distinguishes:
+  - published updates without eligible donor recipients
+  - email attempts with SMTP disabled/failing
+- User notification flow now tracks campaign-update engagement more reliably:
+  - open tracking when campaign-update notifications are viewed in user dashboard
+  - click tracking on `View Campaign Update`
+
 ## Frontend Architecture
 
 ### Stack
@@ -113,6 +127,8 @@ frontend/src/
 - Campaign update intelligence:
   - NGO-side delivery and engagement insight panels.
   - Campaign-level and NGO-aggregate update analytics views.
+  - Open/click rates are event-driven and update after user engagement.
+  - Email delivery reflects actual SMTP sends, not only attempts.
 - Webhook operations:
   - Admin dead-letter visibility and replay controls in `AdminDashboard`.
   - Worker status/run, metrics, export, and cleanup controls in `AdminDashboard`.
@@ -167,3 +183,8 @@ npm test
   - Token may be expired/invalid; re-login.
 - Map not rendering:
   - Confirm Leaflet CSS/assets are loaded by app build.
+- Campaign update open/click remains `0.0%`:
+  - no donor has opened/clicked notification yet
+  - ensure users are logged in and viewing notification cards with `notificationType = campaign_update`
+- Campaign update email delivery remains `0.0%`:
+  - backend SMTP is not configured (`MAIL_*` vars missing) or SMTP send is failing

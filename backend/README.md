@@ -81,6 +81,29 @@ Backend API for NGO-Connect. Runtime is PostgreSQL-first and serves all client a
   - giving-circle contributions now carry payment metadata and are recorded only after frontend gateway-confirmed payment flow
 - Added idempotent reward writes and core-flow gamification hooks for donations and volunteer approvals.
 
+### Phase 11: Full Role Workflow + Flood Scenario Automation
+- Added full scenario runner:
+  - `npm run scenario:flood`
+- Added moderation-focused role scenario:
+  - `npm run scenario:roles`
+- Flood scenario covers:
+  - user/ngo/admin lifecycle workflows
+  - NGO verification + rejection flows
+  - campaigns, updates, members, opportunities, shifts, wishlists, pledges
+  - donations + certificate decisions
+  - messaging, support requests, flag requests + moderation
+  - CRM segmentation/messaging, corporate matching, endorsements, gamification
+  - webhook admin operations and dashboard/analytics probes
+- Reports are generated under:
+  - `docs/test-reports/`
+
+### Phase 12: Campaign Update Analytics Tracking Hardening
+- Legacy campaign updates are normalized with generated IDs so analytics counts are stable.
+- Open/click rates depend on notification engagement events:
+  - `POST /api/notifications/:id/open`
+- Email delivery rate depends on SMTP success:
+  - configure `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASS` (and optional `MAIL_FROM`)
+
 ## Backend Architecture
 
 ### Stack
@@ -292,6 +315,8 @@ npm run seed
 npm run dev
 npm start
 npm run smoke
+npm run scenario:flood
+npm run scenario:roles
 npm run smoke:webhook
 npm run smoke:webhook:worker
 npm run webhook:worker:tick
@@ -300,6 +325,20 @@ npm run db:migrate:webhooks
 npm run db:migrate:innovation
 npm run webhook:receiver:example
 ```
+
+### Scenario Notes
+- `scenario:flood` defaults:
+  - 10 users, 4 NGOs, 3 campaigns per verified NGO
+  - 2 opportunities/wishlists/shifts per verified NGO
+  - 2 members per team role bucket
+- You can override volume with env vars:
+  - `FLOOD_USER_COUNT`
+  - `FLOOD_NGO_COUNT`
+  - `FLOOD_CAMPAIGNS_PER_NGO`
+  - `FLOOD_OPPORTUNITIES_PER_NGO`
+  - `FLOOD_WISHLIST_ITEMS_PER_NGO`
+  - `FLOOD_SHIFTS_PER_NGO`
+  - `FLOOD_MEMBERS_PER_ROLE`
 
 ### Smoke Test (API)
 
