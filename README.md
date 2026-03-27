@@ -394,3 +394,26 @@ For module-specific details, refer to:
 
 - `backend/README.md`
 - `frontend/README.md`
+
+<!-- portfolio-readme-start -->
+## Project Snapshot
+**Project:** Ngo-Connect
+**Category:** fullstack
+
+NGO platform with backend APIs, frontend interface, and smoke-tested workflows. Delivered a structured social-impact workflow and validated high-value journeys through smoke-tested flows.
+
+## Tech Stack
+- Node.js
+- Express
+- PostgreSQL
+- React
+
+## Quick Start
+```bash
+# Open project in your IDE and run with the project-specific command
+```
+
+## Maintainer
+- Utsav Anand
+- GitHub: https://github.com/utsavanand0209
+<!-- portfolio-readme-end -->
