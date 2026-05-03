@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/ngo-connect-ai/static/css/main.c1672596.css",
-    "main.js": "/ngo-connect-ai/static/js/main.0bb6c2de.js",
+    "main.js": "/ngo-connect-ai/static/js/main.546b8843.js",
     "index.html": "/ngo-connect-ai/index.html",
     "main.c1672596.css.map": "/ngo-connect-ai/static/css/main.c1672596.css.map",
-    "main.0bb6c2de.js.map": "/ngo-connect-ai/static/js/main.0bb6c2de.js.map"
+    "main.546b8843.js.map": "/ngo-connect-ai/static/js/main.546b8843.js.map"
   },
   "entrypoints": [
     "static/css/main.c1672596.css",
-    "static/js/main.0bb6c2de.js"
+    "static/js/main.546b8843.js"
   ]
 }
