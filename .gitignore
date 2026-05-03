@@ -1,0 +1,42 @@
+node_modules/
+.cache/
+.venv/
+venv/
+
+# Build artifacts
+frontend/build/
+dist/
+coverage/
+
+# Environment files (never commit secrets)
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# OS / tooling
+.DS_Store
+*.log
+
+# Python cache / temp artifacts
+__pycache__/
+*.py[cod]
+
+# Runtime/generated project artifacts
+backend/uploads/*
+!backend/uploads/.gitkeep
+docs/test-reports/*
+!docs/test-reports/.gitkeep
+docs/organized/documents/*.aux
+docs/organized/documents/*.out
+/screenshots/
+frontend/react-scripts
+frontend/ngo-connect-frontend@1.0.0
+
+# Office lock files
+~$*.pptx
