@@ -116,6 +116,15 @@ const ContextCard = ({ card }) => {
   return null;
 };
 
+const buildChatErrorMessage = (err) => {
+  if (!err?.response) {
+    return 'Unable to reach backend API. If local: start backend on port 5001. If deployed: set REACT_APP_API_URL to your live backend /api URL.';
+  }
+  const serverMessage = String(err.response?.data?.message || '').trim();
+  if (serverMessage) return serverMessage;
+  return 'Sorry, I encountered an error. Please try again.';
+};
+
 export default function Chatbot() {
   const role = getUserRole() || 'guest';
   const [messages, setMessages] = useState([
@@ -177,7 +186,7 @@ export default function Chatbot() {
         setSuggestedQuestions(getDefaultQuestions(role));
       }
     } catch (err) {
-      const errorMessage = { from: 'bot', text: 'Sorry, I encountered an error. Please try again.' };
+      const errorMessage = { from: 'bot', text: buildChatErrorMessage(err) };
       setMessages(prev => [...prev, errorMessage]);
       setSuggestedQuestions(getDefaultQuestions(role));
     } finally {

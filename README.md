@@ -185,11 +185,15 @@ Update `backend/.env` with at least:
 cp frontend/.env.example frontend/.env
 ```
 
-Default API URL value:
+Default `frontend/.env` API URL value (local development):
 
 ```env
 REACT_APP_API_URL=http://localhost:5001/api
 ```
+
+If `REACT_APP_API_URL` is not set:
+- local hostnames (`localhost`, `127.0.0.1`) fall back to `http://localhost:5001/api`
+- non-local deployments fall back to `/api` (you should set `REACT_APP_API_URL` explicitly for GitHub Pages or any separate frontend/backend hosting)
 
 ### 5. Create Schema and Seed Data
 
@@ -355,6 +359,7 @@ Action:
 
 - Confirm backend is running on `http://localhost:5001`.
 - Check `frontend/.env` value for `REACT_APP_API_URL`.
+- For deployed frontend (for example GitHub Pages), set `REACT_APP_API_URL` to the live backend API base (example: `https://your-backend-domain/api`).
 
 ## Task 2 Screenshots
 

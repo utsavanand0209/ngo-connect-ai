@@ -159,6 +159,10 @@ REACT_APP_API_URL=http://localhost:5001/api
 
 If not set, frontend defaults to `http://localhost:5001/api`.
 
+Behavior without `REACT_APP_API_URL`:
+- on local hostnames (`localhost`, `127.0.0.1`): uses `http://localhost:5001/api`
+- on non-local deployments: uses `/api` (set `REACT_APP_API_URL` explicitly when frontend and backend are on different domains)
+
 ## Commands
 
 ```bash
@@ -179,6 +183,9 @@ npm test
 - `404` for API calls:
   - Check `REACT_APP_API_URL`.
   - Verify backend is running and route exists.
+- `ERR_CONNECTION_REFUSED` in browser console:
+  - Local run: backend is likely not running on `:5001`.
+  - Deployed run: `REACT_APP_API_URL` may still point to localhost; set it to your live backend `/api` URL.
 - Auth redirects to login:
   - Token may be expired/invalid; re-login.
 - Map not rendering:

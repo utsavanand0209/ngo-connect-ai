@@ -1,14 +1,33 @@
 import axios from 'axios';
 import { getUserRole, getValidToken } from '../utils/auth';
 
-const normalizeBase = (value) => value.replace(/\/+$/, '');
-const envApiUrl = process.env.REACT_APP_API_URL;
+const normalizeBase = (value) => String(value || '').trim().replace(/\/+$/, '');
+const envApiUrl = normalizeBase(process.env.REACT_APP_API_URL);
 const LOCAL_API_URL = 'http://localhost:5001/api';
-const API_URL = normalizeBase(envApiUrl || LOCAL_API_URL);
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
+
+const isBrowser = typeof window !== 'undefined';
+const browserHost = isBrowser ? String(window.location.hostname || '').toLowerCase() : '';
+const isLocalBrowserHost = LOCAL_HOSTS.has(browserHost);
+
+const resolveApiUrl = () => {
+  if (envApiUrl) return envApiUrl;
+  if (isLocalBrowserHost) return LOCAL_API_URL;
+  return '/api';
+};
+
+const API_URL = resolveApiUrl();
 
 const api = axios.create({ baseURL: API_URL });
 
 const getRoleFromToken = () => getUserRole();
+
+if (!envApiUrl && !isLocalBrowserHost) {
+  // Helps diagnose broken API calls on deployed frontend builds (for example GitHub Pages).
+  // In production-like hosts, set REACT_APP_API_URL to your deployed backend /api URL.
+  // eslint-disable-next-line no-console
+  console.warn('[NGO Connect] REACT_APP_API_URL is not set. Falling back to "/api".');
+}
 
 api.interceptors.request.use(config => {
   const token = getValidToken();
@@ -35,7 +54,9 @@ api.interceptors.response.use(
 
       if (!isAbsoluteBase) {
         if (currentBase.startsWith('/')) {
-          candidates.push(LOCAL_API_URL);
+          if (isLocalBrowserHost) {
+            candidates.push(LOCAL_API_URL);
+          }
         } else if (currentBase) {
           candidates.push('/api');
         }

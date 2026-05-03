@@ -24,9 +24,18 @@ const STATUS_STYLES = {
   in_review: 'bg-blue-100 text-blue-800 border-blue-200'
 };
 
-const API_ROOT = String(process.env.REACT_APP_API_URL || 'http://localhost:5001/api')
-  .replace(/\/+$/, '')
-  .replace(/\/api$/, '');
+const normalizeBase = (value) => String(value || '').trim().replace(/\/+$/, '');
+const resolveApiRoot = () => {
+  const configuredBase = normalizeBase(api.defaults?.baseURL || process.env.REACT_APP_API_URL || '');
+  if (!configuredBase) return '';
+  if (/^https?:\/\//i.test(configuredBase)) return configuredBase.replace(/\/api$/, '');
+  if (configuredBase.startsWith('/')) {
+    const origin = typeof window !== 'undefined' ? String(window.location.origin || '').replace(/\/+$/, '') : '';
+    return `${origin}${configuredBase}`.replace(/\/api$/, '');
+  }
+  return configuredBase.replace(/\/api$/, '');
+};
+const API_ROOT = resolveApiRoot();
 
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 const toSafeText = (value) => String(value || '').trim();
