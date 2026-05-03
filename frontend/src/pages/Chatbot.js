@@ -4,13 +4,44 @@ import { getUserRole } from '../utils/auth';
 import { PaperAirplaneIcon } from '@heroicons/react/solid';
 import { SparklesIcon } from '@heroicons/react/outline';
 
-const SUGGESTED_QUESTIONS = [
-  'How do I donate to a campaign and get a receipt?',
-  'Why is my certificate not available yet?',
-  'How do I volunteer for a campaign and share onboarding details?',
-  'How do volunteer opportunities and certificates work?',
-  'How can I message an NGO from the platform?'
-];
+const ROLE_DEFAULT_QUESTIONS = {
+  guest: [
+    'What can I do on this platform without login?',
+    'How do I register as User or NGO?',
+    'How can I browse NGOs and campaigns?'
+  ],
+  user: [
+    'How do I donate to a campaign and get a receipt?',
+    'Why is my certificate not available yet?',
+    'How can I message an NGO from the platform?',
+    'How do volunteer opportunities and certificates work?'
+  ],
+  ngo: [
+    'How do I manage NGO profile and campaigns?',
+    'How do I approve donation certificate requests?',
+    'How do I review volunteer certificate approvals?'
+  ],
+  admin: [
+    'How do NGO verification workflows work?',
+    'How do I review flag requests?',
+    'How do I monitor webhook worker status?'
+  ]
+};
+
+const getDefaultQuestions = (role) => ROLE_DEFAULT_QUESTIONS[role] || ROLE_DEFAULT_QUESTIONS.guest;
+
+const getWelcomeText = (role) => {
+  if (role === 'admin') {
+    return "Welcome! I'm NGO Connect Bot.\n\nI can help with admin workflows: verifications, moderation, analytics, webhooks, and support-request monitoring.";
+  }
+  if (role === 'ngo') {
+    return "Welcome! I'm NGO Connect Bot.\n\nI can help you manage NGO profile, campaigns, approvals, support requests, and innovation tools.";
+  }
+  if (role === 'user') {
+    return "Welcome! I'm NGO Connect Bot.\n\nAsk me anything about donations, volunteering, certificates, support requests, messages, and innovation features.";
+  }
+  return "Welcome! I'm NGO Connect Bot.\n\nAsk me anything about NGO Connect features and role workflows.";
+};
 
 const BotAvatar = () => (
   <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white">
@@ -22,15 +53,79 @@ const UserAvatar = () => (
   <div className="w-10 h-10 rounded-full bg-gray-300"></div>
 );
 
+const formatCompactNumber = (value) => {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return String(value || '0');
+  return n.toLocaleString('en-IN');
+};
+
+const ContextCard = ({ card }) => {
+  if (!card) return null;
+
+  if (card.type === 'stats' && Array.isArray(card.items)) {
+    return (
+      <div className="mt-3 rounded-xl border border-indigo-200 bg-white/80 p-3">
+        <p className="text-xs font-semibold text-indigo-700 mb-2">{card.title || 'Live Stats'}</p>
+        <div className="grid grid-cols-2 gap-2">
+          {card.items.slice(0, 6).map((item) => (
+            <div key={`${item.label}-${item.value}`} className="rounded-lg bg-indigo-50 px-2 py-1.5">
+              <p className="text-[10px] uppercase tracking-wide text-indigo-500">{item.label}</p>
+              <p className="text-xs font-semibold text-indigo-900">{formatCompactNumber(item.value)}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if ((card.type === 'ngos' || card.type === 'campaigns') && Array.isArray(card.rows)) {
+    return (
+      <div className="mt-3 rounded-xl border border-indigo-200 bg-white/80 p-3">
+        <p className="text-xs font-semibold text-indigo-700 mb-2">{card.title || 'Matched Results'}</p>
+        <div className="space-y-2">
+          {card.rows.slice(0, 4).map((row, idx) => (
+            <div key={`${row.id || row.title || row.name || idx}`} className="rounded-lg bg-indigo-50 px-2 py-1.5">
+              <p className="text-xs font-semibold text-indigo-900">
+                {row.name || row.title || 'Item'}
+              </p>
+              {card.type === 'ngos' ? (
+                <p className="text-[11px] text-indigo-700">
+                  {row.category || 'N/A'} • {row.location || 'N/A'}
+                </p>
+              ) : (
+                <p className="text-[11px] text-indigo-700">
+                  {row.category || 'Campaign'} • {row.location || 'N/A'} • {row.ngoName || 'NGO'}
+                </p>
+              )}
+              {card.type === 'campaigns' && (
+                <p className="text-[11px] text-indigo-800">
+                  ₹{formatCompactNumber(row.raisedAmount)} raised
+                  {Number(row.goalAmount || 0) > 0 ? ` / ₹${formatCompactNumber(row.goalAmount)}` : ''}
+                </p>
+              )}
+              {card.type === 'ngos' && row.summary && (
+                <p className="text-[11px] text-indigo-800 line-clamp-2">{row.summary}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+};
+
 export default function Chatbot() {
+  const role = getUserRole() || 'guest';
   const [messages, setMessages] = useState([
-    { from: 'bot', text: "Welcome! I'm NGO Connect Bot.\n\nAsk me anything about using the platform: donations, volunteering, certificates, dashboards, and messages." }
+    { from: 'bot', text: getWelcomeText(role), mode: 'system' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [suggestedQuestions, setSuggestedQuestions] = useState(getDefaultQuestions(role));
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
-  const role = getUserRole() || 'guest';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -40,11 +135,11 @@ export default function Chatbot() {
     scrollToBottom();
   }, [messages, loading]);
 
-  const send = async e => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const sendMessage = async (rawMessage) => {
+    const outgoing = String(rawMessage || '').trim();
+    if (!outgoing || loading) return;
 
-    const userMessage = { from: 'user', text: input };
+    const userMessage = { from: 'user', text: outgoing };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setLoading(true);
@@ -58,21 +153,42 @@ export default function Chatbot() {
         }));
 
       const res = await api.post('/ai/chat', {
-        message: input,
+        message: outgoing,
         history,
         clientContext: {
           role,
           path: window.location.pathname
         }
       });
-      const botMessage = { from: 'bot', text: res.data.reply };
+      const botMessage = {
+        from: 'bot',
+        text: res.data.reply,
+        mode: res.data?.mode || null,
+        cards: Array.isArray(res.data?.meta?.contextCards) ? res.data.meta.contextCards : []
+      };
       setMessages(prev => [...prev, botMessage]);
+
+      const followUps = Array.isArray(res.data?.meta?.followUps)
+        ? res.data.meta.followUps.filter(Boolean)
+        : [];
+      if (followUps.length > 0) {
+        setSuggestedQuestions(followUps.slice(0, 5));
+      } else {
+        setSuggestedQuestions(getDefaultQuestions(role));
+      }
     } catch (err) {
       const errorMessage = { from: 'bot', text: 'Sorry, I encountered an error. Please try again.' };
       setMessages(prev => [...prev, errorMessage]);
+      setSuggestedQuestions(getDefaultQuestions(role));
     } finally {
       setLoading(false);
     }
+  };
+
+  const send = async e => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    await sendMessage(input);
   };
 
   return (
@@ -87,15 +203,12 @@ export default function Chatbot() {
 
       <div className="flex-1 p-6 space-y-6 overflow-y-auto bg-gray-50">
         <div className="flex flex-wrap gap-2">
-          {SUGGESTED_QUESTIONS.map((q) => (
+          {suggestedQuestions.map((q) => (
             <button
               key={q}
               type="button"
               disabled={loading}
-              onClick={() => {
-                setInput(q);
-                inputRef.current?.focus();
-              }}
+              onClick={() => sendMessage(q)}
               className="text-xs px-3 py-1.5 rounded-full border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
             >
               {q}
@@ -108,6 +221,16 @@ export default function Chatbot() {
             {m.from === 'bot' ? <BotAvatar /> : <UserAvatar />}
             <div className={`max-w-md p-4 rounded-2xl ${m.from === 'bot' ? 'bg-indigo-100 text-gray-800 rounded-bl-none' : 'bg-blue-500 text-white rounded-br-none'}`}>
               <p className="text-sm whitespace-pre-wrap">{m.text}</p>
+              {m.from === 'bot' && Array.isArray(m.cards) && m.cards.length > 0 && (
+                <div>
+                  {m.cards.map((card, idx) => (
+                    <ContextCard key={`${card.type || 'card'}-${idx}`} card={card} />
+                  ))}
+                </div>
+              )}
+              {m.from === 'bot' && m.mode && m.mode !== 'system' && (
+                <p className="text-[10px] mt-2 opacity-70 uppercase tracking-wide">{m.mode}</p>
+              )}
             </div>
           </div>
         ))}

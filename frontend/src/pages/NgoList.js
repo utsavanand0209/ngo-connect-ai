@@ -102,7 +102,7 @@ export default function NgoList() {
       setFlagMessage('Unable to submit request.');
     }
     setFlagLoading(false);
-    setModalOpen(false);
+    closeFlagModal();
   };
 
   const formatCompact = (value) => {
@@ -181,7 +181,7 @@ export default function NgoList() {
                 <div className="relative">
                   <img
                     className="h-56 w-full object-cover"
-                    src={ngo.programs?.[0]?.img || ngo.logo || `https://source.unsplash.com/random/400x300?charity,${ngo.category}`}
+                    src={ngo.programs?.[0]?.img || ngo.logo || `https://picsum.photos/seed/${ngo.id}/400/300`}
                     alt={ngo.name}
                   />
                   {ngo.logo && (

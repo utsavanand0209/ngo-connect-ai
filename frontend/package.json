@@ -2,6 +2,7 @@
   "name": "ngo-connect-frontend",
   "version": "1.0.0",
   "private": true,
+  "homepage": "https://utsavanand0209.github.io/ngo-connect-ai",
   "proxy": "http://localhost:5001",
   "dependencies": {
     "@heroicons/react": "^1.0.6",
@@ -21,6 +22,9 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "postbuild": "cp build/index.html build/404.html",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build",
     "test": "react-scripts test"
   },
   "browserslist": {
@@ -43,6 +47,7 @@
   "devDependencies": {
     "@faker-js/faker": "^10.2.0",
     "@types/google-one-tap": "^1.2.7",
+    "gh-pages": "^6.3.0",
     "playwright": "^1.58.2"
   }
 }

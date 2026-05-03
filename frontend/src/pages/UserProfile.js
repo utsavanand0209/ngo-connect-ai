@@ -145,7 +145,7 @@ export default function UserProfile() {
         <div className="bg-white rounded-xl shadow-lg p-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
             <div className="md:col-span-1 flex flex-col items-center">
-              <img className="h-32 w-32 rounded-full object-cover" src="https://source.unsplash.com/random/200x200?face" alt="Profile" />
+              <img className="h-32 w-32 rounded-full object-cover" src={`https://ui-avatars.com/api/?name=${user.name || 'User'}&background=random`} alt="Profile" />
               <button className="mt-4 text-sm font-semibold text-indigo-600 hover:text-indigo-500">Change Picture</button>
             </div>
             <form onSubmit={submitProfile} className="md:col-span-2 space-y-6">

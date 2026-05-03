@@ -37,7 +37,7 @@ import InnovationCenter from './pages/InnovationCenter';
 
 export default function App() {
   return (
-    <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+    <BrowserRouter basename={process.env.PUBLIC_URL} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
       <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />

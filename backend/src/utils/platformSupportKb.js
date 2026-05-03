@@ -161,9 +161,11 @@ const SUPPORT_KB = [
   {
     id: 'ngo_dashboard',
     title: 'NGO Dashboard',
-    keywords: ['ngo dashboard', 'approval queue', 'transactions', 'pending', 'certificates', 'volunteers'],
+    keywords: ['ngo dashboard', 'ngo profile', 'manage profile', 'campaign management', 'approval queue', 'transactions', 'pending', 'certificates', 'volunteers'],
     content: [
       'NGO Dashboard highlights:',
+      '- NGO profile management (organization details, transparency/profile updates).',
+      '- Campaign management (create campaigns, manage updates, and monitor progress).',
       '- Donation transactions + total received.',
       '- Donation certificate approval queue.',
       '- Volunteer certificate approval queue (volunteer opportunities).',
@@ -182,6 +184,96 @@ const SUPPORT_KB = [
       '- Review flagged campaigns or requests.',
       '- View admin dashboard metrics (donations, volunteers, recent activity).',
       '- Track support requests submitted to NGOs.'
+    ].join('\n')
+  },
+  {
+    id: 'campaign_updates_analytics',
+    title: 'Campaign Updates and Delivery Analytics',
+    keywords: ['campaign update', 'impact update', 'delivery analytics', 'open tracking', 'update analytics', 'engagement'],
+    content: [
+      'Campaign updates support delivery + engagement tracking.',
+      '',
+      'NGO flow:',
+      '- NGO can post updates on campaign details.',
+      '- The system records recipient counts and engagement metrics for each update.',
+      '- NGO dashboard has aggregate update analytics across campaigns.',
+      '',
+      'User flow:',
+      '- Users can read campaign updates from campaign pages and notifications.',
+      '- Notification opens can be tracked for campaign-update engagement metrics.'
+    ].join('\n')
+  },
+  {
+    id: 'innovation_center',
+    title: 'Innovation Center',
+    keywords: ['innovation center', 'giving circle', 'wishlist', 'emergency', 'crm', 'corporate match', 'endorsement', 'gamification', 'leaderboard'],
+    content: [
+      'Innovation Center includes advanced community + fundraising modules.',
+      '',
+      'Main modules:',
+      '- Giving Circles: create/join circles and contribute via payment flow.',
+      '- Wishlists: NGOs create needs; users pledge quantity-based support.',
+      '- Emergency feed: emergency campaigns/opportunities with rapid contribution flows.',
+      '- Volunteer shifts/logs: schedule shifts, signups, approval logs, exports.',
+      '- CRM: donor notes, donor segments, and targeted campaign messages.',
+      '- Corporate matching: evaluate and approve company donation matches.',
+      '- Endorsements + gamification: recognition signals, points, and leaderboard views.',
+      '',
+      'Access:',
+      '- Route: /innovation-center (authenticated).'
+    ].join('\n')
+  },
+  {
+    id: 'admin_verification_moderation',
+    title: 'Admin Verification and Moderation',
+    keywords: ['admin verification', 'verify ngo', 'verification queue', 'moderation', 'flagged content', 'flag request', 'review'],
+    content: [
+      'Admin verification and moderation are separate workflows.',
+      '',
+      'Verification:',
+      '- Admin -> Verifications shows NGO verification queue, checklist, and decision history.',
+      '- Typical outcomes: approved or rejected with reasons/suggestions.',
+      '',
+      'Moderation:',
+      '- Users can submit flag requests for NGOs or campaigns.',
+      '- Admin reviews pending requests, then approves or rejects.',
+      '- Flagged Content shows open flagged entities and review requests.'
+    ].join('\n')
+  },
+  {
+    id: 'admin_webhooks_ops',
+    title: 'Admin Webhook Operations',
+    keywords: ['webhook', 'delivery logs', 'dead-letter', 'retry', 'worker status', 'cleanup', 'export webhooks'],
+    content: [
+      'Admin dashboard includes webhook reliability operations.',
+      '',
+      'Available actions:',
+      '- View delivery logs and webhook metrics.',
+      '- Retry failed deliveries.',
+      '- Check worker runtime status and trigger manual worker run.',
+      '- Run retention cleanup (dry run or purge).',
+      '- Export webhook data (CSV/JSON depending on endpoint).',
+      '',
+      'These tools are intended for admin users only.'
+    ].join('\n')
+  },
+  {
+    id: 'navigation_routes',
+    title: 'Page Navigation Map',
+    keywords: ['where is', 'route', 'navigation', 'page', 'path', 'url', 'open page'],
+    content: [
+      'Common pages and routes:',
+      '- Dashboard: /dashboard',
+      '- NGOs list: /ngos',
+      '- Campaigns: /campaigns',
+      '- Volunteer Opportunities: /volunteer-opportunities',
+      '- Volunteer Campaigns: /volunteer-campaigns',
+      '- Messages: /messages',
+      '- Chatbot: /chatbot',
+      '- Innovation Center: /innovation-center',
+      '- Admin Dashboard: /admin',
+      '- Admin Verifications: /admin/verifications',
+      '- Admin Flagged Content: /admin/flagged-content'
     ].join('\n')
   },
   {

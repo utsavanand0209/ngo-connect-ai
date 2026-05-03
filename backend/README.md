@@ -324,6 +324,7 @@ npm run seed
 npm run dev
 npm start
 npm run smoke
+npm run eval:chatbot
 npm run scenario:flood
 npm run scenario:roles
 npm run smoke:webhook
@@ -334,6 +335,27 @@ npm run db:migrate:webhooks
 npm run db:migrate:innovation
 npm run webhook:receiver:example
 ```
+
+### Chatbot Evaluation
+
+Run chatbot quality evaluation (60 mixed question types across roles, workflows, stats, security, troubleshooting, and typo/multilingual prompts):
+
+```bash
+cd backend
+npm run eval:chatbot
+```
+
+Useful options:
+
+```bash
+npm run eval:chatbot -- --list
+npm run eval:chatbot -- --category=donations,volunteering
+npm run eval:chatbot -- --limit=20 --strict
+npm run eval:chatbot -- --mode=gemini --strict
+npm run eval:chatbot:gemini
+```
+
+Reports are saved in `docs/test-reports/` as JSON + Markdown.
 
 ### Scenario Notes
 - `scenario:flood` defaults:

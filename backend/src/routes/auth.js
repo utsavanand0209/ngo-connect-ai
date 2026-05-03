@@ -121,11 +121,13 @@ router.get('/me', auth('user'), async (req, res) => {
 router.put('/me', auth('user'), async (req, res) => {
   try {
     const { name, email, interests, skills, mobileNumber } = req.body;
-    const user = await User.findByIdAndUpdate(
+    const doc = await User.findByIdAndUpdate(
       req.user.id,
       { name, email, interests, skills, mobileNumber },
       { new: true }
-    ).select('-password');
+    );
+    const user = doc ? doc.toObject() : null;
+    if (user && user.password) delete user.password;
     res.json(user);
   } catch (err) {
     console.error(err);

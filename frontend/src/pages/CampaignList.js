@@ -169,7 +169,7 @@ export default function CampaignList() {
           <div className="grid gap-8 lg:grid-cols-3">
             {filteredCampaigns.map(c => (
               <div key={c.id} className="bg-white rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-2 transition-transform duration-300 flex flex-col">
-                <img className="h-56 w-full object-cover" src={c.image || `https://source.unsplash.com/random/400x300?cause,${c.category}`} alt={c.title} />
+                <img className="h-56 w-full object-cover" src={c.image || `https://picsum.photos/seed/${c.id}/400/300`} alt={c.title} />
                 <div className="p-6 flex flex-col flex-grow">
                   <p className="text-sm font-semibold text-indigo-600 uppercase tracking-wide">{c.category}</p>
                   <h3 className="text-2xl font-bold text-gray-900 mt-1">{c.title}</h3>

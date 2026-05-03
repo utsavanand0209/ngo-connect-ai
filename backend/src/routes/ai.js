@@ -5,6 +5,14 @@ const AILog = require('../models/AILog');
 const NGO = require('../models/NGO');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
+const Donation = require('../models/Donation');
+const VolunteerOpportunity = require('../models/VolunteerOpportunity');
+const VolunteerApplication = require('../models/VolunteerApplication');
+const HelpRequest = require('../models/HelpRequest');
+const Certificate = require('../models/Certificate');
+const Category = require('../models/Category');
+const Message = require('../models/Message');
+const FlagRequest = require('../models/FlagRequest');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const jwt = require('jsonwebtoken');
 const {
@@ -12,6 +20,9 @@ const {
   escapeRegExp,
   selectKbEntries,
   normalizeHistory,
+  extractQuerySignals,
+  analyzeStatsQuery,
+  buildFollowUpSuggestions,
   buildPrompt,
   buildFallbackReply
 } = require('../utils/supportChat');
@@ -63,6 +74,61 @@ const parseDurationDays = (input = {}) => {
     return Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
   }
   return null;
+};
+
+const buildPlatformSnapshot = async () => {
+  const [
+    ngosTotal,
+    ngosVerified,
+    campaignsTotal,
+    usersTotal,
+    adminsTotal,
+    donationsTotal,
+    donationsCompletedTotal,
+    volunteerOpportunitiesTotal,
+    volunteerApplicationsTotal,
+    helpRequestsTotal,
+    certificatesTotal,
+    categoriesTotal,
+    messagesTotal,
+    flagRequestsTotal
+  ] = await Promise.all([
+    NGO.countDocuments({ isActive: { $ne: false } }),
+    NGO.countDocuments({ isActive: { $ne: false }, verified: true }),
+    Campaign.countDocuments({}),
+    User.countDocuments({ role: 'user' }),
+    User.countDocuments({ role: 'admin' }),
+    Donation.countDocuments({}),
+    Donation.countDocuments({ status: 'completed' }),
+    VolunteerOpportunity.countDocuments({}),
+    VolunteerApplication.countDocuments({}),
+    HelpRequest.countDocuments({}),
+    Certificate.countDocuments({}),
+    Category.countDocuments({}),
+    Message.countDocuments({}),
+    FlagRequest.countDocuments({})
+  ]);
+
+  const pendingComputed = Math.max(0, Number(ngosTotal || 0) - Number(ngosVerified || 0));
+
+  return {
+    asOf: new Date().toISOString(),
+    ngosTotal: Number(ngosTotal || 0),
+    ngosVerified: Number(ngosVerified || 0),
+    ngosPending: pendingComputed,
+    campaignsTotal: Number(campaignsTotal || 0),
+    usersTotal: Number(usersTotal || 0),
+    adminsTotal: Number(adminsTotal || 0),
+    donationsTotal: Number(donationsTotal || 0),
+    donationsCompletedTotal: Number(donationsCompletedTotal || 0),
+    volunteerOpportunitiesTotal: Number(volunteerOpportunitiesTotal || 0),
+    volunteerApplicationsTotal: Number(volunteerApplicationsTotal || 0),
+    helpRequestsTotal: Number(helpRequestsTotal || 0),
+    certificatesTotal: Number(certificatesTotal || 0),
+    categoriesTotal: Number(categoriesTotal || 0),
+    messagesTotal: Number(messagesTotal || 0),
+    flagRequestsTotal: Number(flagRequestsTotal || 0)
+  };
 };
 
 const average = (values = []) => {
@@ -642,7 +708,6 @@ router.post('/chat', async (req, res) => {
       return res.json({ reply: 'Please type a message and try again.' });
     }
 
-    const m = message.toLowerCase();
     const history = normalizeHistory(req.body?.history || []);
 
     const clientContext = req.body?.clientContext && typeof req.body.clientContext === 'object'
@@ -662,73 +727,310 @@ router.post('/chat', async (req, res) => {
       }
     }
 
-    const kbEntries = selectKbEntries(message);
-    
+    const kbEntries = selectKbEntries(message, 4, { history });
+    const querySignals = extractQuerySignals({ message, history });
+    const statsAnalysis = analyzeStatsQuery({ message, history, querySignals });
+    const querySignalsForLog = {
+      intentHints: querySignals.intentHints || [],
+      locationHints: querySignals.locationHints || [],
+      categoryHints: querySignals.categoryHints || [],
+      namedEntityHints: querySignals.namedEntityHints || [],
+      wantsDirectoryResults: Boolean(querySignals.wantsDirectoryResults),
+      asksForCampaigns: Boolean(querySignals.asksForCampaigns),
+      asksForNgos: Boolean(querySignals.asksForNgos),
+      statsQuery: Boolean(statsAnalysis.isStatsQuery),
+      statsTargets: statsAnalysis.targets || [],
+      wantsVerified: Boolean(statsAnalysis.wantsVerified),
+      wantsPending: Boolean(statsAnalysis.wantsPending),
+      wantsCompleted: Boolean(statsAnalysis.wantsCompleted)
+    };
+
+    let platformSnapshot = null;
+    if (statsAnalysis.isStatsQuery) {
+      try {
+        platformSnapshot = await buildPlatformSnapshot();
+      } catch (snapshotErr) {
+        console.error('Failed to build platform snapshot for chatbot:', snapshotErr);
+      }
+    }
+
     const buildDbContext = async () => {
       const parts = [];
+      const seenRows = new Set();
+      const matchedNgos = [];
+      const matchedCampaigns = [];
 
-	      const addNgoContext = async (label, filter) => {
-	        const ngos = await NGO.find(filter).limit(20).select('name description category location isActive');
-	        const visible = (ngos || []).filter((ngo) => ngo && ngo.isActive !== false).slice(0, 5);
-	        if (visible.length === 0) return;
-	        parts.push(`NGOs ${label}:`);
-	        parts.push(...visible.map((n) => `- ${n.name}: ${(n.description || '').slice(0, 160)} (Category: ${n.category || 'N/A'}, Location: ${n.location || 'N/A'})`));
-	      };
+      const cleanText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+      const toDisplayValue = (value, fallback = 'N/A') => {
+        if (value === null || value === undefined) return fallback;
+        if (typeof value === 'string') {
+          const text = cleanText(value);
+          return text || fallback;
+        }
+        if (typeof value === 'number') {
+          return Number.isFinite(value) ? String(value) : fallback;
+        }
+        if (typeof value === 'boolean') {
+          return value ? 'Yes' : 'No';
+        }
+        if (Array.isArray(value)) {
+          const partsFromArray = value
+            .map((entry) => toDisplayValue(entry, ''))
+            .filter(Boolean);
+          const uniqueParts = [...new Set(partsFromArray)];
+          return uniqueParts.length > 0 ? uniqueParts.join(', ') : fallback;
+        }
+        if (typeof value === 'object') {
+          const locationParts = [
+            value.address,
+            value.area,
+            value.city,
+            value.district,
+            value.state,
+            value.country,
+            value.pincode,
+            value.postalCode
+          ]
+            .map((entry) => toDisplayValue(entry, ''))
+            .filter(Boolean);
+          if (locationParts.length > 0) return [...new Set(locationParts)].join(', ');
+
+          const genericParts = [value.name, value.label, value.title]
+            .map((entry) => toDisplayValue(entry, ''))
+            .filter(Boolean);
+          if (genericParts.length > 0) return genericParts.join(', ');
+          return fallback;
+        }
+        return fallback;
+      };
+
+      const markSeen = (prefix, value) => {
+        const key = `${prefix}:${String(value || '').trim().toLowerCase()}`;
+        if (!key || seenRows.has(key)) return false;
+        seenRows.add(key);
+        return true;
+      };
+
+      const toLooseRegex = (value) => {
+        const normalized = String(value || '').trim();
+        const escaped = escapeRegExp(normalized);
+        if (!escaped || escaped.length < 2) return null;
+        return new RegExp(escaped.replace(/\s+/g, '.*'), 'i');
+      };
+
+      const addNgoContext = async (label, filter) => {
+        const ngos = await NGO.find(filter).limit(20).select('name description category location isActive verified');
+        const visible = (ngos || [])
+          .filter((ngo) => ngo && ngo.isActive !== false && ngo.verified !== false)
+          .slice(0, 6);
+        const selected = visible.filter((ngo) => markSeen('ngo', ngo.id || ngo._id || ngo.name));
+        const formatted = selected.map((ngo) => `- ${toDisplayValue(ngo.name, 'NGO')}: ${(ngo.description || '').slice(0, 160)} (Category: ${toDisplayValue(ngo.category, 'N/A')}, Location: ${toDisplayValue(ngo.location, 'N/A')})`);
+        if (formatted.length === 0) return;
+        for (const ngo of selected) {
+          matchedNgos.push({
+            id: String(ngo.id || ngo._id || ''),
+            name: toDisplayValue(ngo.name, 'NGO'),
+            category: toDisplayValue(ngo.category, 'N/A'),
+            location: toDisplayValue(ngo.location, 'N/A'),
+            summary: String((ngo.description || '').slice(0, 140))
+          });
+        }
+        parts.push(`NGOs ${label}:`);
+        parts.push(...formatted);
+      };
 
       const addCampaignContext = async (label, filter) => {
         const campaigns = await Campaign.find(filter)
           .populate('ngo', 'name verified isActive')
-          .limit(5)
+          .limit(10)
           .select('title description category location goalAmount currentAmount');
-        const visible = (campaigns || []).filter((c) => c.ngo && c.ngo.verified !== false && c.ngo.isActive !== false);
-        if (visible.length === 0) return;
+        const visible = (campaigns || [])
+          .filter((campaign) => campaign && campaign.ngo && campaign.ngo.verified !== false && campaign.ngo.isActive !== false)
+          .slice(0, 6);
+        const selected = visible
+          .filter((campaign) => markSeen('campaign', campaign.id || campaign._id || campaign.title));
+        const formatted = selected
+          .map((campaign) => {
+            const goal = Number(campaign.goalAmount || 0);
+            const current = Number(campaign.currentAmount || 0);
+            const pct = goal > 0 ? Math.round((current / goal) * 100) : 0;
+            return `- ${toDisplayValue(campaign.title, 'Campaign')}: ${toDisplayValue(campaign.category, 'Campaign')} (${toDisplayValue(campaign.location, 'N/A')}) by ${toDisplayValue(campaign.ngo?.name, 'NGO')} | ₹${current} raised${goal ? ` of ₹${goal} (${pct}%)` : ''}`;
+          });
+        if (formatted.length === 0) return;
+        for (const campaign of selected) {
+          const goal = Number(campaign.goalAmount || 0);
+          const current = Number(campaign.currentAmount || 0);
+          matchedCampaigns.push({
+            id: String(campaign.id || campaign._id || ''),
+            title: toDisplayValue(campaign.title, 'Campaign'),
+            category: toDisplayValue(campaign.category, 'Campaign'),
+            location: toDisplayValue(campaign.location, 'N/A'),
+            ngoName: toDisplayValue(campaign.ngo?.name, 'NGO'),
+            raisedAmount: current,
+            goalAmount: goal
+          });
+        }
         parts.push(`Campaigns ${label}:`);
-        parts.push(...visible.map((c) => {
-          const goal = Number(c.goalAmount || 0);
-          const current = Number(c.currentAmount || 0);
-          const pct = goal > 0 ? Math.round((current / goal) * 100) : 0;
-          return `- ${c.title}: ${c.category || 'Campaign'} (${c.location || 'N/A'}) by ${c.ngo?.name || 'NGO'} | ₹${current} raised${goal ? ` of ₹${goal} (${pct}%)` : ''}`;
-        }));
+        parts.push(...formatted);
       };
 
-      // Location-based queries: "... in <location>"
-      if (m.includes(' in ')) {
-        const partsRaw = m.split(' in ');
-        const potentialLocation = partsRaw[partsRaw.length - 1].replace('?', '').trim();
-        const escaped = escapeRegExp(potentialLocation);
-        if (escaped && escaped.length >= 2) {
-	          const rx = new RegExp(escaped, 'i');
-	          await Promise.all([
-	            addNgoContext(`in "${potentialLocation}"`, { verified: true, location: rx }),
-	            addCampaignContext(`in "${potentialLocation}"`, { location: rx })
-	          ]);
-	        }
-	      }
+      const locationHints = (querySignals.locationHints || []).slice(0, 2);
+      for (const location of locationHints) {
+        const rx = toLooseRegex(location);
+        if (!rx) continue;
+        const ngoLocationFilter = {
+          verified: true,
+          $or: [
+            { location: rx },
+            { 'location.address': rx },
+            { 'location.area': rx },
+            { 'location.city': rx },
+            { 'location.district': rx },
+            { 'location.state': rx },
+            { 'location.country': rx }
+          ]
+        };
+        const campaignLocationFilter = {
+          $or: [
+            { location: rx },
+            { 'location.address': rx },
+            { 'location.area': rx },
+            { 'location.city': rx },
+            { 'location.district': rx },
+            { 'location.state': rx },
+            { 'location.country': rx }
+          ]
+        };
+        await Promise.all([
+          addNgoContext(`in "${location}"`, ngoLocationFilter),
+          addCampaignContext(`in "${location}"`, campaignLocationFilter)
+        ]);
+      }
 
-      // Category-based queries: "... for/about <category>"
-      if (m.includes(' for ') || m.includes(' about ')) {
-        const partsRaw = m.split(/ for | about /);
-        const potentialCategory = partsRaw[partsRaw.length - 1].replace('?', '').trim();
-        const escaped = escapeRegExp(potentialCategory);
-        if (escaped && escaped.length >= 2) {
-	          const rx = new RegExp(escaped, 'i');
-	          await Promise.all([
-	            addNgoContext(`related to "${potentialCategory}"`, { verified: true, category: rx }),
-	            addCampaignContext(`related to "${potentialCategory}"`, { category: rx })
-	          ]);
-	        }
-	      }
+      const categoryHints = (querySignals.categoryHints || []).slice(0, 2);
+      for (const category of categoryHints) {
+        const rx = toLooseRegex(category);
+        if (!rx) continue;
+        await Promise.all([
+          addNgoContext(`related to "${category}"`, { verified: true, category: rx }),
+          addCampaignContext(`related to "${category}"`, { category: rx })
+        ]);
+      }
 
-      return parts.join('\n');
+      const namedEntityHints = (querySignals.namedEntityHints || []).slice(0, 2);
+      for (const nameHint of namedEntityHints) {
+        const rx = toLooseRegex(nameHint);
+        if (!rx) continue;
+        await Promise.all([
+          addNgoContext(`matching "${nameHint}"`, { verified: true, name: rx }),
+          addCampaignContext(`matching "${nameHint}"`, { title: rx })
+        ]);
+      }
+
+      const hasSignalFilters =
+        locationHints.length > 0 ||
+        categoryHints.length > 0 ||
+        namedEntityHints.length > 0;
+
+      const wantsEntitySuggestions =
+        querySignals.wantsDirectoryResults ||
+        (querySignals.asksForNgos && /\b(which|what|show|list|find|recommend|suggest|best|top)\b/i.test(querySignals.normalizedText || '')) ||
+        (querySignals.asksForCampaigns && /\b(which|what|show|list|find|recommend|suggest|best|top)\b/i.test(querySignals.normalizedText || ''));
+
+      if (!hasSignalFilters && wantsEntitySuggestions) {
+        await Promise.all([
+          addNgoContext('you can explore now', { verified: true }),
+          addCampaignContext('you can explore now', {})
+        ]);
+      }
+
+      if (platformSnapshot && statsAnalysis.isStatsQuery) {
+        parts.push('Platform snapshot stats:');
+        parts.push(`- NGOs: ${platformSnapshot.ngosTotal} total, ${platformSnapshot.ngosVerified} verified, ${platformSnapshot.ngosPending} pending verification`);
+        parts.push(`- Campaigns: ${platformSnapshot.campaignsTotal}`);
+        parts.push(`- Users: ${platformSnapshot.usersTotal}, Admins: ${platformSnapshot.adminsTotal}`);
+        parts.push(`- Donations: ${platformSnapshot.donationsTotal} total, ${platformSnapshot.donationsCompletedTotal} completed`);
+        parts.push(`- Volunteering: ${platformSnapshot.volunteerOpportunitiesTotal} opportunities, ${platformSnapshot.volunteerApplicationsTotal} applications`);
+        parts.push(`- Support requests: ${platformSnapshot.helpRequestsTotal}`);
+        parts.push(`- Certificates: ${platformSnapshot.certificatesTotal}`);
+        parts.push(`- Categories: ${platformSnapshot.categoriesTotal}`);
+        parts.push(`- Messages: ${platformSnapshot.messagesTotal}`);
+        parts.push(`- Flag requests: ${platformSnapshot.flagRequestsTotal}`);
+      }
+
+      const contextCards = [];
+      if (platformSnapshot && statsAnalysis.isStatsQuery) {
+        contextCards.push({
+          type: 'stats',
+          title: 'Live Platform Snapshot',
+          items: [
+            { label: 'NGOs', value: platformSnapshot.ngosTotal },
+            { label: 'Verified NGOs', value: platformSnapshot.ngosVerified },
+            { label: 'Campaigns', value: platformSnapshot.campaignsTotal },
+            { label: 'Completed Donations', value: platformSnapshot.donationsCompletedTotal },
+            { label: 'Volunteer Applications', value: platformSnapshot.volunteerApplicationsTotal },
+            { label: 'Support Requests', value: platformSnapshot.helpRequestsTotal }
+          ]
+        });
+      }
+      if (matchedNgos.length > 0) {
+        contextCards.push({
+          type: 'ngos',
+          title: `Matched NGOs (${matchedNgos.length})`,
+          rows: matchedNgos.slice(0, 4)
+        });
+      }
+      if (matchedCampaigns.length > 0) {
+        contextCards.push({
+          type: 'campaigns',
+          title: `Matched Campaigns (${matchedCampaigns.length})`,
+          rows: matchedCampaigns.slice(0, 4)
+        });
+      }
+
+      return {
+        text: parts.join('\n'),
+        contextCards
+      };
     };
 
     // --- Basic RAG (Retrieval-Augmented Generation) ---
-    const dbContext = await buildDbContext();
+    const dbContextPayload = await buildDbContext();
+    const dbContext = dbContextPayload.text;
+    const contextCards = Array.isArray(dbContextPayload.contextCards) ? dbContextPayload.contextCards : [];
+    const followUps = buildFollowUpSuggestions({
+      role,
+      message,
+      querySignals,
+      statsAnalysis,
+      platformSnapshot
+    });
+    const responseMeta = {
+      followUps,
+      contextCards,
+      role,
+      intentHints: querySignalsForLog.intentHints,
+      locationHints: querySignalsForLog.locationHints,
+      categoryHints: querySignalsForLog.categoryHints,
+      modePolicy: 'auto'
+    };
 
     if (!genAI) {
-      const reply = buildFallbackReply({ message, role, kbEntries });
-      await AILog.create({ type: 'chat', payload: { message, role, historyCount: history.length }, result: { reply, mode: 'fallback' } });
-      return res.json({ reply, mode: 'fallback' });
+      const reply = buildFallbackReply({
+        message,
+        role,
+        kbEntries,
+        history,
+        querySignals,
+        platformSnapshot,
+        dbContext
+      });
+      await AILog.create({
+        type: 'chat',
+        payload: { message, role, historyCount: history.length, querySignals: querySignalsForLog },
+        result: { reply, mode: 'fallback', followUps, contextCards }
+      });
+      return res.json({ reply, mode: 'fallback', meta: responseMeta });
     }
 
     const model = genAI.getGenerativeModel(
@@ -742,7 +1044,8 @@ router.post('/chat', async (req, res) => {
       kbEntries,
       dbContext,
       history,
-      clientContext
+      clientContext,
+      querySignals
     });
 
     try {
@@ -750,12 +1053,28 @@ router.post('/chat', async (req, res) => {
       const response = await result.response;
       const reply = response.text();
 
-      await AILog.create({ type: 'chat', payload: { message, role, historyCount: history.length }, result: { reply, mode: 'gemini' } });
-      return res.json({ reply, mode: 'gemini' });
+      await AILog.create({
+        type: 'chat',
+        payload: { message, role, historyCount: history.length, querySignals: querySignalsForLog },
+        result: { reply, mode: 'gemini', followUps, contextCards }
+      });
+      return res.json({ reply, mode: 'gemini', meta: responseMeta });
     } catch (llmErr) {
-      const reply = buildFallbackReply({ message, role, kbEntries });
-      await AILog.create({ type: 'chat', payload: { message, role, historyCount: history.length }, result: { reply, mode: 'fallback-after-error' } });
-      return res.json({ reply, mode: 'fallback' });
+      const reply = buildFallbackReply({
+        message,
+        role,
+        kbEntries,
+        history,
+        querySignals,
+        platformSnapshot,
+        dbContext
+      });
+      await AILog.create({
+        type: 'chat',
+        payload: { message, role, historyCount: history.length, querySignals: querySignalsForLog },
+        result: { reply, mode: 'fallback-after-error', followUps, contextCards }
+      });
+      return res.json({ reply, mode: 'fallback', meta: responseMeta });
     }
 
   } catch (err) {

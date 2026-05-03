@@ -13,6 +13,8 @@
     "scenario:flood": "node scripts/floodDataAndFeatureTest.js",
     "scenario:roles": "node scripts/roleWorkflowScenario.js",
     "scenario:verification-interface": "node scripts/verificationInterfaceScenario.js",
+    "eval:chatbot": "node scripts/chatbotEvaluation.js",
+    "eval:chatbot:gemini": "node scripts/chatbotEvaluation.js --mode=gemini --strict",
     "smoke:webhook": "node scripts/webhookSmokeTest.js",
     "smoke:webhook:worker": "node scripts/webhookAutoRetrySmokeTest.js",
     "test:fraud": "node scripts/fraudScoringTest.js",
